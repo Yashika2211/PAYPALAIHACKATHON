@@ -41,17 +41,15 @@ export async function recomputeOrderState(orderId: string): Promise<OrderState> 
   }
 }
 
-/** Creates the PayPal AUTHORIZE order after the human approves the bundle. */
-export async function createPaypalOrder(orderId: string) {
-  const { order, allocations } = await loadOrder(orderId);
-  if (order.paypalOrderId) return order.paypalOrderId;
+/** Runs the human's approval of the bundle through the firewall. */
+async function approveBundle(order: typeof schema.orders.$inferSelect, allocations: Array<typeof schema.merchantAllocations.$inferSelect>) {
   if (order.state !== "mandate_signed") throw new Error(`Order is ${order.state}`);
 
   const merchants = await categoryOf(allocations.map((a) => a.merchantId));
   const decision = await guard({
     mandateId: order.mandateId,
     rfqId: order.rfqId,
-    orderId,
+    orderId: order.id,
     actor: "human",
     actorLabel: "buyer (approve bundle)",
     action: {
@@ -65,6 +63,13 @@ export async function createPaypalOrder(orderId: string) {
     },
   });
   if (decision.decision !== "allow") throw new Error(`Mandate Firewall: ${decision.reasons.join("; ")}`);
+}
+
+/** Creates the PayPal AUTHORIZE order after the human approves the bundle. */
+export async function createPaypalOrder(orderId: string) {
+  const { order, allocations } = await loadOrder(orderId);
+  if (order.paypalOrderId) return order.paypalOrderId;
+  await approveBundle(order, allocations);
 
   const created = await pp.createAuthorizeOrder({
     orderId,
@@ -74,6 +79,30 @@ export async function createPaypalOrder(orderId: string) {
   await db.update(schema.orders).set({ paypalOrderId: created.id }).where(eq(schema.orders.id, orderId));
   await emit("paypal", { step: "order_created", paypalOrderId: created.id, status: created.status }, { rfqId: order.rfqId, orderId });
   return created.id;
+}
+
+/**
+ * Sandbox-only checkout with PayPal's test card: the order is created and
+ * authorized in one server call, so judges can run the flow without a sandbox login.
+ */
+export async function payWithSandboxCard(orderId: string) {
+  if (process.env.PAYPAL_ENV === "live") throw new Error("Test cards are sandbox-only");
+  const { order, allocations } = await loadOrder(orderId);
+  if (order.paypalAuthorizationId) return order.paypalAuthorizationId;
+  await approveBundle(order, allocations);
+
+  const created = await pp.createAuthorizeOrder({
+    orderId,
+    testCard: true,
+    description: `Haggle bundle (${allocations.length} merchants)`,
+    lines: allocations.map((a) => ({ merchantId: a.merchantId, name: a.description, amountCents: a.amountCents })),
+  });
+  await db.update(schema.orders).set({ paypalOrderId: created.id }).where(eq(schema.orders.id, orderId));
+  await emit("paypal", { step: "order_created", paypalOrderId: created.id, status: created.status, source: "sandbox_card" }, { rfqId: order.rfqId, orderId });
+  const auth = created.purchase_units?.[0]?.payments?.authorizations?.[0];
+  if (!auth) throw new Error(`PayPal did not authorize the card (status ${created.status})`);
+  await applyAuthorization(orderId, auth.id, auth.status);
+  return auth.id;
 }
 
 /** Called after buyer approval in the PayPal popup. Authorizes and applies PayPal's response. */

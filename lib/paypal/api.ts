@@ -43,16 +43,21 @@ export interface OrderLine {
  * Orders v2: one AUTHORIZE purchase unit per bundle, one item per merchant.
  * (Multi-unit AUTHORIZE is rejected by PayPal with UNSUPPORTED_INTENT.)
  */
+/** PayPal's published sandbox Visa. Only ever used against the sandbox API. */
+export const SANDBOX_TEST_CARD = { number: "4032039317984658", expiry: "2030-12", name: "Haggle Sandbox Buyer", security_code: "123" };
+
 export function createAuthorizeOrder(args: {
   orderId: string;
   lines: OrderLine[];
   description: string;
+  /** Server-side sandbox card instead of the PayPal wallet popup. */
+  testCard?: boolean;
 }) {
   const total = args.lines.reduce((s, l) => s + l.amountCents, 0);
   return paypalRequest<PayPalOrder>({
     method: "POST",
     path: "/v2/checkout/orders",
-    requestId: `order-create-${args.orderId}`,
+    requestId: `order-create-${args.orderId}${args.testCard ? "-card" : ""}`,
     orderId: args.orderId,
     body: {
       intent: "AUTHORIZE",
@@ -76,15 +81,17 @@ export function createAuthorizeOrder(args: {
           })),
         },
       ],
-      payment_source: {
-        paypal: {
-          experience_context: {
-            brand_name: "Haggle",
-            shipping_preference: "NO_SHIPPING",
-            user_action: "CONTINUE",
+      payment_source: args.testCard
+        ? { card: SANDBOX_TEST_CARD }
+        : {
+            paypal: {
+              experience_context: {
+                brand_name: "Haggle",
+                shipping_preference: "NO_SHIPPING",
+                user_action: "CONTINUE",
+              },
+            },
           },
-        },
-      },
     },
   });
 }

@@ -564,6 +564,23 @@ function PayPalCheckout({ orderId, onAuthorized, onError }: { orderId: string; o
       <div>
         {state === "loading" && <div className="h-11 animate-pulse rounded-md bg-line" />}
         <div ref={ref} />
+        <button
+          type="button"
+          disabled={state === "processing"}
+          onClick={async () => {
+            setState("processing");
+            try {
+              await api(`/api/orders/${orderId}/test-card`, {});
+              onAuthorized();
+            } catch (e) {
+              onError((e as Error).message);
+              setState("ready");
+            }
+          }}
+          className="mt-2 w-full rounded-md border border-dashed border-line-strong px-3 py-2 text-xs text-muted transition hover:border-ink hover:text-ink disabled:opacity-50"
+        >
+          No sandbox login? Use PayPal&apos;s sandbox test card
+        </button>
       </div>
     </div>
   );
