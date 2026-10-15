@@ -158,3 +158,11 @@ body {
     animation: none;
   }
 }
+
+/* Ledger grid rows */
+.haggle-group-start {
+  border-top: 2px solid var(--line-strong) !important;
+}
+.haggle-row-deny {
+  background-color: color-mix(in srgb, var(--bad-soft) 55%, transparent) !important;
+}

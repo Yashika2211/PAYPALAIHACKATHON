@@ -72,8 +72,11 @@ export function selectLines(catalog: CatalogEntry[], needs: Need[]): Array<{ ite
   for (const need of needs) {
     if (catalog.length === 0) break;
     const byPrice = [...catalog].sort((a, b) => a.listPriceCents - b.listPriceCents);
-    const isService = (i: CatalogEntry) => /coffee|tea|service/i.test(i.name);
-    const mains = byPrice.filter((i) => !isService(i));
+    const isService = (i: CatalogEntry) => /coffee|tea|chai|service/i.test(i.name);
+    const nonService = byPrice.filter((i) => !isService(i));
+    // Food for N people: prefer items sold per person over platters, trays and sides.
+    const perPerson = nonService.filter((i) => /person|pp\b|head/i.test(i.unit));
+    const mains = /people|person|lunch|dinner|breakfast|meal|cater/i.test(need.description) && perPerson.length ? perPerson : nonService;
     if (need.vegetarianShare > 0 && need.vegetarianShare < 1 && mains.length > 1) {
       const veg = mains.find((i) => i.dietaryTags.includes("vegetarian"));
       const other = mains.find((i) => !i.dietaryTags.includes("vegetarian")) ?? mains.find((i) => i !== veg);
@@ -190,7 +193,8 @@ export async function merchantReply(
     `You are the AI sales agent for ${merchant.name} (${merchant.tagline}). Personality: ${VOICE[merchant.personality]}.`,
     "You negotiate with a buyer's AI agent. Reply with the exact catalog lines you are quoting, unit prices in US cents, a short friendly message (max 2 sentences) and terms.",
     "Never price above list. Your owner has a private minimum for each item; offers below it are automatically rejected, so concede gradually.",
-    "Only quote items from the catalog, using their ids.",
+    "Only quote items from the catalog, using their ids. Pick items that genuinely satisfy each need: per-person meals for a lunch, never platters or sides as a substitute for meals, and meet any vegetarian share.",
+    "suggestedLines is a sensible starting selection; keep it unless you have a clearly better match.",
   ].join("\n");
   const context = {
     round: turn.round,

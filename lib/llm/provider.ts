@@ -76,7 +76,7 @@ export async function structured<S extends z.ZodType>(args: {
         system: args.system,
         output: Output.object({ schema: args.schema }),
         abortSignal: AbortSignal.timeout(args.timeoutMs ?? 20_000),
-        maxRetries: 0,
+        maxRetries: 1,
       };
       const result = args.messages
         ? await generateText({ ...base, messages: args.messages })

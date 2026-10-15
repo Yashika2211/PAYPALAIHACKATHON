@@ -40,9 +40,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/sell" className="rounded-md px-3 py-1.5 text-muted transition hover:bg-sunken hover:text-ink">
                 Sell
               </Link>
-              <span className="hidden rounded-md px-3 py-1.5 text-faint sm:inline" title="Coming soon">
+              <Link href="/ledger" className="rounded-md px-3 py-1.5 text-muted transition hover:bg-sunken hover:text-ink">
                 Ledger
-              </span>
+              </Link>
               <span className="figures ml-2 hidden rounded border border-line px-2 py-1 text-[11px] uppercase tracking-wider text-muted md:inline">
                 PayPal sandbox
               </span>

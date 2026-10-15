@@ -31,6 +31,11 @@ export async function emit(
   });
 }
 
+/** All events after a seq, across every request (for the ledger). */
+export function allEventsSince(afterSeq: number, limit = 500) {
+  return db.select().from(schema.events).where(gt(schema.events.seq, afterSeq)).orderBy(asc(schema.events.seq)).limit(limit);
+}
+
 export function eventsSince(ids: { rfqId?: string; orderId?: string }, afterSeq: number) {
   const scope = [
     ids.rfqId ? eq(schema.events.rfqId, ids.rfqId) : undefined,

@@ -48,6 +48,13 @@ export function parsePriceText(text: string): ExtractedItem[] {
   return items;
 }
 
+/** Lowercases, dedupes, and makes vegan imply vegetarian. */
+export function normalizeTags(tags: readonly string[]): string[] {
+  const out = new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean));
+  if (out.has("vegan")) out.add("vegetarian");
+  return [...out];
+}
+
 /** Vision + structured output: menu photo, PDF or text in, typed catalog out. */
 export async function extractCatalog(input: ExtractInput) {
   const system = [
@@ -65,7 +72,7 @@ export async function extractCatalog(input: ExtractInput) {
   if (input.file) content.push({ type: "file", data: input.file.base64, mediaType: input.file.mediaType });
 
   const fallbackItems = input.text ? parsePriceText(input.text) : [];
-  return structured({
+  const result = await structured({
     tier: "smart",
     schema: Extraction,
     system,
@@ -73,4 +80,6 @@ export async function extractCatalog(input: ExtractInput) {
     timeoutMs: 45_000,
     fallback: () => ({ businessName: null, category: input.knownCategories[0] ?? "catering", items: fallbackItems }),
   });
+  result.value.items = result.value.items.map((i) => ({ ...i, dietaryTags: normalizeTags(i.dietaryTags) }));
+  return result;
 }

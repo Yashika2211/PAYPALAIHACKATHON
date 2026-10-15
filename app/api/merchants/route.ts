@@ -2,6 +2,7 @@ import { desc } from "drizzle-orm";
 import { connection } from "next/server";
 import { z } from "zod";
 import { db, schema } from "@/lib/db/client";
+import { normalizeTags } from "@/lib/agents/catalog-extractor";
 import { handle } from "@/lib/http";
 import { structured } from "@/lib/llm/provider";
 
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
         // Private floor derived from the guardrail. Never shown to any LLM.
         floorPriceCents: Math.ceil(i.priceCents * (1 - body.maxDiscountPct / 100)),
         category: body.category,
-        dietaryTags: i.dietaryTags,
+        dietaryTags: normalizeTags(i.dietaryTags),
         leadTimeHours: body.leadTimeHours,
         extractionConfidence: i.confidence,
       })),
