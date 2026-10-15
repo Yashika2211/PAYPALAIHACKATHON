@@ -13,7 +13,8 @@
     "db:up": "docker compose up -d --wait",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx --env-file=.env scripts/seed.ts"
+    "db:seed": "tsx --env-file=.env scripts/seed.ts",
+    "webhook:register": "tsx --env-file=.env scripts/register-webhook.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
