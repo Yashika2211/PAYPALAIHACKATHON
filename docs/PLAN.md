@@ -71,7 +71,7 @@ All money stored as **integer cents** + `currency` (USD). All tables have `id uu
 | `offers` | negotiation_id, round, from (`buyer`/`merchant`), payload jsonb (typed offer), total_cents, valid_until, message, raw_llm_output |
 | `bundles` | rfq_id, selected_offer_ids[], total_cents, first_quote_total_cents, rationale |
 | `orders` | rfq_id, mandate_id, bundle_id, paypal_order_id, state (see §4), total_cents, platform_fee_bps |
-| `purchase_units` | order_id, merchant_id, reference_id, amount_cents, paypal_authorization_id, paypal_capture_id, state (`authorized`/`captured`/`voided`/`refunded`), delivery_photo_url, verifier_result jsonb |
+| `merchant_allocations` | order_id, merchant_id, sku, amount_cents, paypal_authorization_id (shared), paypal_capture_id, state (`authorized`/`captured`/`voided`/`refunded`), delivery_photo_url, verifier_result jsonb |
 | `paypal_events` | paypal_event_id **unique**, event_type, resource_id, raw jsonb, signature_verified bool, processed_at, error |
 | `paypal_api_calls` | order_id, method, path, request_id, status, redacted_request, redacted_response, duration_ms (feeds debug panel) |
 | `payouts` | purchase_unit_id, merchant_id, payout_batch_id, payout_item_id, gross_cents, fee_cents, net_cents, status |
@@ -133,7 +133,9 @@ Pure transition table; illegal transitions throw. Order state changes **only** i
 ## 7. Risks and decisions to confirm
 
 1. **AG Grid Community limits**: row grouping and sparklines are **Enterprise-only**. Plan: build group-by-order with a custom collapsible full-width row and draw sparklines with a small SVG cell renderer, all in Community. Switch to Enterprise only if you confirm a trial license is allowed.
-2. **Multiple purchase units with AUTHORIZE**: supported by Orders v2, but each PU gets its own authorization. Haggle is payee on all PUs (marketplace model) and merchants are paid by Payouts. We'll verify this in M1 sandbox. If it's rejected, the fallback is one PU with partial captures.
+2. **Multiple purchase units with AUTHORIZE: verified NOT supported** (sandbox, 2026-10-16: `UNSUPPORTED_INTENT`, "Only intent=CAPTURE is supported" for multi-PU). **Decision:** one purchase unit per bundle, with one item line per merchant (`sku` = merchant id), so the PayPal checkout still itemizes every merchant. That gives one authorization, then **one partial capture per merchant** (`final_capture: false` until the last), and any undelivered remainder is **voided**. Haggle is payee (marketplace model); merchants are paid net of fee by Payouts. The `purchase_units` table becomes `merchant_allocations` (same columns, with `paypal_capture_id` per merchant and a shared `paypal_authorization_id`). Verified: single-PU AUTHORIZE order with itemized merchants → `CREATED`, `authorize` link present.
+   **Payouts: verified working** (sandbox batch `MZYYZ6EC7N9VC` → `PENDING`).
+   **Scopes missing on the app:** Invoicing and Vault v3 (`payment-tokens`). Enable "Invoicing" + "Save payment methods" on the app if we want the M8 stretch items.
 3. **Payouts in sandbox**: the REST app needs the **Payouts** feature enabled, and the sandbox business account needs balance. If it's off, I stop and tell you.
 4. **Vault in sandbox**: often requires the "Vault" feature on the app. It sits behind `FEATURE_VAULT`.
 5. **Render costs**: background workers and cron jobs are paid instance types, and free Postgres expires after 30 days. Budget about $7–20/mo, or run the worker inside the web service on the free tier.

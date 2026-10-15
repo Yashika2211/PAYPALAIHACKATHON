@@ -4,7 +4,8 @@
 - [x] M0: plan, data model, state machine, PayPal endpoint map (`docs/PLAN.md`)
 
 ## In progress
-- [ ] Waiting on credentials: PayPal sandbox client ID/secret, Anthropic API key
+- [x] PayPal sandbox creds verified (OAuth, single-PU AUTHORIZE, Payouts)
+- [ ] Waiting on: Anthropic API key, sandbox buyer + merchant emails
 
 ## Next
 - [ ] M1: thin slice end to end (seed → request → single negotiation → mandate → authorize → capture → payout → webhook)
