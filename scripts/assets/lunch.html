@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;height:100vh;background:#7d6f60;display:grid;place-items:center;font-family:Helvetica,Arial,sans-serif}
+.table{background:#b08a5e;padding:28px;border-radius:8px;box-shadow:inset 0 0 60px rgba(0,0,0,.3),0 24px 48px rgba(0,0,0,.4);transform:rotate(-1deg)}
+.grid{display:grid;grid-template-columns:repeat(8,92px);gap:10px}
+.box{height:70px;background:linear-gradient(#cda773,#b98f58);border-radius:4px;position:relative;box-shadow:0 3px 5px rgba(0,0,0,.35)}
+.box:before{content:"";position:absolute;left:6px;right:6px;top:6px;height:3px;background:rgba(0,0,0,.15)}
+.st{position:absolute;left:10px;right:10px;top:22px;height:30px;border-radius:15px;font-size:10px;font-weight:700;display:grid;place-items:center;text-align:center;line-height:1.05}
+.v{background:#2f7d3b;color:#fff}.c{background:#f3efe6;color:#7a2e12;border:1px solid #7a2e12}
+.label{margin-top:16px;font-size:14px;font-weight:700;color:#2f2214}
+</style></head><body><div class="table"><div class="grid" id="g"></div>
+<div class="label">SAFFRON &amp; SAGE CATERING · ORDER HG-40 · 20 × FALAFEL LUNCH BOX (V) + 20 × CHICKEN SHAWARMA LUNCH BOX</div></div>
+<script>g.innerHTML=Array.from({length:40},(_,i)=>i<20?'<div class="box"><div class="st v">FALAFEL<br>VEG</div></div>':'<div class="box"><div class="st c">CHICKEN<br>SHAWARMA</div></div>').join("")</script>
+</body></html>

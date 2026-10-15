@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fileFromUrl, prepareUpload } from "@/lib/image";
 import { formatUsd } from "@/lib/money";
 import { Button, Card, Delta, Field, Label, Money, Pill, StatePill, cx, inputClass } from "@/components/ui";
 
@@ -15,7 +16,16 @@ interface Snapshot {
   merchants: Array<{ id: string; name: string; category: string; status: string; tagline: string; personality: string }>;
   mandate: null | { id: string; status: string; budgetCapCents: number; spentCents: number; approvalThresholdCents: number; expiresAt: string; signature: string };
   order: null | { id: string; state: string; totalCents: number; firstQuoteTotalCents: number | null; rationale: string; paypalOrderId: string | null; paypalAuthorizationId: string | null };
-  allocations: Array<{ id: string; merchantId: string; description: string; amountCents: number; state: string; paypalCaptureId: string | null }>;
+  allocations: Array<{
+    id: string;
+    merchantId: string;
+    description: string;
+    amountCents: number;
+    state: string;
+    paypalCaptureId: string | null;
+    deliveryPhotoUrl: string | null;
+    verifierResult: null | { pass: boolean; confidence: number; reason: string; source: string };
+  }>;
   payouts: Array<{ allocationId: string; netCents: number; feeCents: number; status: string; payoutBatchId: string | null }>;
 }
 interface FeedEvent {
@@ -40,7 +50,7 @@ async function api<T>(url: string, body?: unknown): Promise<T> {
   return data;
 }
 
-const REFRESH_KINDS = ["bundle_ready", "bundle_failed", "paypal", "order_state", "payout", "mandate_signed", "quarantine", "negotiation_done"];
+const REFRESH_KINDS = ["bundle_ready", "bundle_failed", "paypal", "order_state", "payout", "mandate_signed", "quarantine", "negotiation_done", "delivery"];
 
 /**
  * Live events over Server-Sent Events, with polling as a fallback if the stream
@@ -487,34 +497,16 @@ function BundlePanel({
       </div>
 
       <ul className="divide-y divide-line">
-        {snap.allocations.map((a) => {
-          const payout = snap.payouts.find((p) => p.allocationId === a.id);
-          return (
-            <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">{name(a.merchantId)}</p>
-                <p className="truncate text-sm text-muted">{a.description.replace(/^[^:]+:\s*/, "")}</p>
-                {payout && (
-                  <p className="figures mt-1 text-xs text-muted">
-                    payout {formatUsd(payout.netCents)} · fee {formatUsd(payout.feeCents)} · <span className={payout.status === "succeeded" ? "text-good" : payout.status === "failed" ? "text-bad" : ""}>{payout.status}</span>
-                  </p>
-                )}
-              </div>
-              <Money cents={a.amountCents} className="text-lg" />
-              <StatePill state={a.state} />
-              {payout && (payout.status === "failed" || payout.status === "unclaimed") && (
-                <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={run(`retry-${a.id}`, () => api(`/api/allocations/${a.id}/retry-payout`, {}))} disabled={!!busy}>
-                  {busy === `retry-${a.id}` ? "Retrying…" : "Retry payout"}
-                </Button>
-              )}
-              {a.state === "authorized" && (
-                <Button variant="good" className="px-3 py-1.5 text-xs" onClick={run(a.id, () => api(`/api/allocations/${a.id}/deliver`, {}))} disabled={!!busy}>
-                  {busy === a.id ? "Capturing…" : "Mark delivered"}
-                </Button>
-              )}
-            </li>
-          );
-        })}
+        {snap.allocations.map((a) => (
+          <AllocationRow
+            key={a.id}
+            a={a}
+            merchant={name(a.merchantId)}
+            payout={snap.payouts.find((p) => p.allocationId === a.id)}
+            busy={busy}
+            run={run}
+          />
+        ))}
       </ul>
 
       {order.state === "mandate_signed" && <PayPalCheckout orderId={order.id} onAuthorized={onAuthorized} onError={onError} />}
@@ -526,7 +518,165 @@ function BundlePanel({
           </Button>
         </div>
       )}
+      {order.paypalOrderId && <DebugPanel orderId={order.id} version={`${order.state}-${snap.payouts.map((p) => p.status).join()}`} />}
     </Card>
+  );
+}
+
+type Allocation = Snapshot["allocations"][number];
+type Runner = (label: string, fn: () => Promise<unknown>) => () => Promise<void>;
+
+/** One merchant's share: delivery photo → AI check → capture → payout, with human overrides. */
+function AllocationRow({ a, merchant, payout, busy, run }: { a: Allocation; merchant: string; payout?: Snapshot["payouts"][number]; busy: string; run: Runner }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const v = a.verifierResult;
+  const sample = /badge|print/i.test(a.description) ? "/demo/delivery-badges.jpg" : "/demo/delivery-lunch.jpg";
+
+  const submitPhoto = (getFile: () => Promise<File>) =>
+    run(`photo-${a.id}`, async () => {
+      const prepared = await prepareUpload(await getFile(), 1400);
+      await api(`/api/allocations/${a.id}/verify`, { photo: { base64: prepared.base64, mediaType: prepared.mediaType }, thumbnail: prepared.thumbnail });
+    });
+
+  return (
+    <li className="px-5 py-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">{merchant}</p>
+          <p className="truncate text-sm text-muted">{a.description.replace(/^[^:]+:\s*/, "")}</p>
+          {payout && (
+            <p className="figures mt-1 text-xs text-muted">
+              payout {formatUsd(payout.netCents)} · fee {formatUsd(payout.feeCents)} ·{" "}
+              <span className={payout.status === "succeeded" ? "text-good" : payout.status === "failed" ? "text-bad" : ""}>{payout.status}</span>
+            </p>
+          )}
+        </div>
+        <Money cents={a.amountCents} className="text-lg" />
+        <StatePill state={a.state} />
+      </div>
+
+      {(v || a.deliveryPhotoUrl) && (
+        <div className={cx("mt-3 flex gap-3 rounded-md border p-3 text-sm", v?.pass ? "border-good/30 bg-good-soft/50" : "border-warn/30 bg-warn-soft/50")}>
+          {a.deliveryPhotoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element -- small inline data URL thumbnail
+            <img src={a.deliveryPhotoUrl} alt="Delivery photo" className="h-16 w-20 shrink-0 rounded object-cover" />
+          )}
+          {v && (
+            <div className="min-w-0">
+              <p className={cx("font-medium", v.pass ? "text-good" : "text-warn")}>
+                {v.pass ? "Delivery verified by AI" : "AI could not verify this delivery"}
+                <span className="figures ml-2 text-xs font-normal text-muted">{Math.round(v.confidence * 100)}% confident</span>
+              </p>
+              <p className="text-muted">{v.reason}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {a.state === "authorized" && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) submitPhoto(async () => f)();
+              }}
+            />
+            <Button variant="good" className="px-3 py-1.5 text-xs" disabled={!!busy} onClick={() => fileRef.current?.click()}>
+              {busy === `photo-${a.id}` ? "Checking photo…" : "Merchant: upload delivery photo"}
+            </Button>
+            <Button variant="secondary" className="px-3 py-1.5 text-xs" disabled={!!busy} onClick={submitPhoto(() => fileFromUrl(sample, "delivery.jpg"))}>
+              Use sample delivery photo
+            </Button>
+            {sample.includes("badges") && (
+              <Button variant="ghost" className="px-3 py-1.5 text-xs" disabled={!!busy} onClick={submitPhoto(() => fileFromUrl("/demo/delivery-short.jpg", "short.jpg"))}>
+                Try a short delivery
+              </Button>
+            )}
+            {v && !v.pass && (
+              <Button variant="ghost" className="px-3 py-1.5 text-xs" disabled={!!busy} onClick={run(a.id, () => api(`/api/allocations/${a.id}/deliver`, {}))}>
+                {busy === a.id ? "Capturing…" : "Buyer: confirm delivered anyway"}
+              </Button>
+            )}
+          </>
+        )}
+        {payout && (payout.status === "failed" || payout.status === "unclaimed") && (
+          <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={run(`retry-${a.id}`, () => api(`/api/allocations/${a.id}/retry-payout`, {}))} disabled={!!busy}>
+            {busy === `retry-${a.id}` ? "Retrying…" : "Retry payout"}
+          </Button>
+        )}
+        {a.state === "captured" && (
+          <Button variant="ghost" className="px-3 py-1.5 text-xs text-muted" onClick={run(`refund-${a.id}`, () => api(`/api/allocations/${a.id}/refund`, { reason: "Buyer dispute" }))} disabled={!!busy}>
+            {busy === `refund-${a.id}` ? "Refunding…" : "Refund this line"}
+          </Button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+interface ApiCall {
+  id: string;
+  method: string;
+  path: string;
+  status: number;
+  requestId: string | null;
+  durationMs: number;
+  request: unknown;
+  response: unknown;
+  createdAt: string;
+}
+
+/** Every PayPal REST call for this order, as sent and received (secrets redacted at write time). */
+function DebugPanel({ orderId, version }: { orderId: string; version: string }) {
+  const [open, setOpen] = useState(false);
+  const [calls, setCalls] = useState<ApiCall[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    api<{ calls: ApiCall[] }>(`/api/orders/${orderId}/paypal-calls`)
+      .then((d) => !cancelled && setCalls(d.calls))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, orderId, version]);
+
+  return (
+    <div className="border-t border-line">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between px-5 py-3 text-left text-sm text-muted hover:text-ink">
+        <span className="figures text-xs uppercase tracking-wider">PayPal API log</span>
+        <span className="figures text-xs">{open ? "hide" : "show raw requests"}</span>
+      </button>
+      {open && (
+        <ol className="figures max-h-96 overflow-y-auto border-t border-line bg-sunken/40 text-xs">
+          {calls.map((c) => (
+            <li key={c.id} className="border-b border-line last:border-b-0">
+              <button className="flex w-full flex-wrap items-center gap-2 px-5 py-2 text-left hover:bg-sunken" onClick={() => setExpanded((e) => (e === c.id ? null : c.id))}>
+                <Pill tone={c.status >= 200 && c.status < 300 ? "good" : "bad"}>{c.status}</Pill>
+                <span className="font-medium">{c.method}</span>
+                <span className="min-w-0 flex-1 truncate text-muted">{c.path}</span>
+                <span className="text-faint">{c.durationMs}ms</span>
+              </button>
+              {expanded === c.id && (
+                <div className="grid gap-2 px-5 pb-3 md:grid-cols-2">
+                  {c.requestId && <p className="text-faint md:col-span-2">PayPal-Request-Id: {c.requestId}</p>}
+                  <pre className="max-h-64 overflow-auto rounded bg-surface p-2 whitespace-pre-wrap">{JSON.stringify(c.request, null, 2)}</pre>
+                  <pre className="max-h-64 overflow-auto rounded bg-surface p-2 whitespace-pre-wrap">{JSON.stringify(c.response, null, 2)}</pre>
+                </div>
+              )}
+            </li>
+          ))}
+          {calls.length === 0 && <li className="px-5 py-3 text-muted">No calls yet.</li>}
+        </ol>
+      )}
+    </div>
   );
 }
 
@@ -655,11 +805,12 @@ const PAYPAL_STEP: Record<string, string> = {
   succeeded: "Payout succeeded",
   failed: "Payout failed",
   retried: "Payout re-sent",
+  refunded: "Refunded to buyer",
   unclaimed: "Payout unclaimed",
 };
 
 function PayPalTimeline({ events }: { events: FeedEvent[] }) {
-  const items = events.filter((e) => ["paypal", "payout", "order_state"].includes(e.kind));
+  const items = events.filter((e) => ["paypal", "payout", "order_state", "delivery"].includes(e.kind));
   return (
     <Card>
       <div className="border-b border-line px-4 py-3">
@@ -673,8 +824,16 @@ function PayPalTimeline({ events }: { events: FeedEvent[] }) {
           {items.map((e) => {
             const p = e.payload;
             const amount = p.amountCents ?? p.netCents ?? p.releasedCents;
-            const label = e.kind === "order_state" ? `Order ${String(p.to).replace(/_/g, " ")}` : (PAYPAL_STEP[p.step] ?? p.step);
-            const tone = e.kind === "order_state" ? "bg-ink" : p.step === "failed" ? "bg-bad" : p.step === "voided" ? "bg-faint" : "bg-accent";
+            const label =
+              e.kind === "order_state"
+                ? `Order ${String(p.to).replace(/_/g, " ")}`
+                : e.kind === "delivery"
+                  ? p.pass
+                    ? "Delivery photo verified by AI"
+                    : "Delivery photo not verified"
+                  : (PAYPAL_STEP[p.step] ?? p.step);
+            const tone =
+              e.kind === "order_state" ? "bg-ink" : e.kind === "delivery" ? (p.pass ? "bg-good" : "bg-warn") : p.step === "failed" ? "bg-bad" : p.step === "voided" ? "bg-faint" : "bg-accent";
             return (
               <li key={e.seq} className="rise relative flex gap-3 py-1.5 text-xs">
                 <span className={cx("relative mt-1 h-2.5 w-2.5 shrink-0 rounded-full ring-4 ring-surface", tone)} />

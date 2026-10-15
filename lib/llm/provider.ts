@@ -10,7 +10,7 @@ export type Tier = "fast" | "smart";
 const DEFAULTS = {
   google: {
     fast: ["gemini-3.5-flash-lite", "gemini-flash-lite-latest"],
-    smart: ["gemini-3.8-flash", "gemini-3.5-flash"],
+    smart: ["gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"],
   },
   anthropic: { fast: ["claude-haiku-5-5"], smart: ["claude-sonnet-5-5", "claude-haiku-5-5"] },
 } as const;

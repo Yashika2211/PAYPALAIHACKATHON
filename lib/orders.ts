@@ -137,7 +137,7 @@ export async function applyAuthorization(orderId: string, authorizationId: strin
       .set({ spentCents: dsql`${schema.mandates.spentCents} + ${order.totalCents}` })
       .where(eq(schema.mandates.id, order.mandateId));
   }
-  await emit("paypal", { step: "authorized", authorizationId, amountCents: order.totalCents }, { rfqId: order.rfqId, orderId });
+  await emit("paypal", { step: "authorized", authorizationId, amountCents: order.totalCents, paypalOrderId: order.paypalOrderId }, { rfqId: order.rfqId, orderId });
   await recomputeOrderState(orderId);
 }
 
@@ -191,7 +191,12 @@ export async function applyCapture(allocationId: string, captureId: string, stat
   if (updated.length === 0) return;
   const a = updated[0];
   const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, a.orderId) });
-  await emit("paypal", { step: "captured", captureId, allocationId, amountCents: a.amountCents }, { rfqId: order?.rfqId, orderId: a.orderId });
+  const merchant = await db.query.merchants.findFirst({ where: eq(schema.merchants.id, a.merchantId) });
+  await emit(
+    "paypal",
+    { step: "captured", captureId, allocationId, merchant: merchant?.name, amountCents: a.amountCents },
+    { rfqId: order?.rfqId, orderId: a.orderId },
+  );
   await recomputeOrderState(a.orderId);
 }
 
@@ -228,7 +233,7 @@ export async function payoutAllocation(allocationId: string) {
     .where(eq(schema.payouts.id, row.id));
   await emit(
     "payout",
-    { step: "sent", merchant: merchant.name, grossCents: alloc.amountCents, feeCents, netCents, batchId: batch.batch_header.payout_batch_id, status: batch.batch_header.batch_status },
+    { step: "sent", allocationId, merchant: merchant.name, grossCents: alloc.amountCents, feeCents, netCents, batchId: batch.batch_header.payout_batch_id, status: batch.batch_header.batch_status },
     { rfqId: order.rfqId, orderId: order.id },
   );
 }
@@ -254,7 +259,7 @@ export async function retryPayout(allocationId: string) {
     .where(eq(schema.payouts.id, payout.id));
   await emit(
     "payout",
-    { step: "retried", merchant: merchant.name, netCents: payout.netCents, batchId: batch.batch_header.payout_batch_id },
+    { step: "retried", allocationId, merchant: merchant.name, netCents: payout.netCents, batchId: batch.batch_header.payout_batch_id },
     { rfqId: order.rfqId, orderId: order.id },
   );
 }
@@ -297,6 +302,44 @@ export async function applyVoid(authorizationId: string) {
   await recomputeOrderState(order.id);
 }
 
+/** Refunds a captured merchant share back to the buyer (dispute or cancellation). */
+export async function refundAllocation(allocationId: string, reason: string) {
+  const alloc = await db.query.merchantAllocations.findFirst({ where: eq(schema.merchantAllocations.id, allocationId) });
+  if (!alloc?.paypalCaptureId || alloc.state !== "captured") throw new Error("Only captured lines can be refunded");
+  const { order } = await loadOrder(alloc.orderId);
+  const decision = await guard({
+    mandateId: order.mandateId,
+    rfqId: order.rfqId,
+    orderId: order.id,
+    actor: "human",
+    actorLabel: "buyer (refund)",
+    action: { type: "refund", amountCents: alloc.amountCents },
+  });
+  if (decision.decision !== "allow") throw new Error(`Mandate Firewall: ${decision.reasons.join("; ")}`);
+  const refund = await pp.refundCapture(alloc.paypalCaptureId, alloc.amountCents, order.id, reason || "Refund via Haggle");
+  await applyRefund(alloc.id, refund.id);
+}
+
+export async function applyRefund(allocationId: string, refundId: string) {
+  const updated = await db
+    .update(schema.merchantAllocations)
+    .set({ state: "refunded" })
+    .where(and(eq(schema.merchantAllocations.id, allocationId), eq(schema.merchantAllocations.state, "captured")))
+    .returning();
+  if (updated.length === 0) return;
+  const a = updated[0];
+  const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, a.orderId) });
+  const merchant = await db.query.merchants.findFirst({ where: eq(schema.merchants.id, a.merchantId) });
+  if (order?.mandateId) {
+    await db
+      .update(schema.mandates)
+      .set({ spentCents: dsql`greatest(0, ${schema.mandates.spentCents} - ${a.amountCents})` })
+      .where(eq(schema.mandates.id, order.mandateId));
+  }
+  await emit("paypal", { step: "refunded", refundId, allocationId, merchant: merchant?.name, amountCents: a.amountCents }, { rfqId: order?.rfqId, orderId: a.orderId });
+  await recomputeOrderState(a.orderId);
+}
+
 /** Idempotent webhook processing. Returns a short description of what was applied. */
 export async function processWebhookEvent(event: WebhookEvent): Promise<string> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PayPal resource shapes vary by event type
@@ -329,6 +372,15 @@ export async function processWebhookEvent(event: WebhookEvent): Promise<string> 
       await payoutAllocation(alloc.id);
       return "capture applied";
     }
+    case "PAYMENT.CAPTURE.REFUNDED": {
+      const captureId = (r.links as Array<{ rel: string; href: string }> | undefined)?.find((l) => l.rel === "up")?.href.split("/").pop();
+      const alloc = captureId
+        ? await db.query.merchantAllocations.findFirst({ where: eq(schema.merchantAllocations.paypalCaptureId, captureId) })
+        : undefined;
+      if (!alloc) return "no matching allocation";
+      await applyRefund(alloc.id, String(r.id));
+      return "refund applied";
+    }
     case "PAYMENT.PAYOUTS-ITEM.SUCCEEDED":
     case "PAYMENT.PAYOUTS-ITEM.FAILED":
     case "PAYMENT.PAYOUTS-ITEM.UNCLAIMED": {
@@ -339,7 +391,7 @@ export async function processWebhookEvent(event: WebhookEvent): Promise<string> 
       if (p) {
         const alloc = await db.query.merchantAllocations.findFirst({ where: eq(schema.merchantAllocations.id, allocationId) });
         const order = alloc ? await db.query.orders.findFirst({ where: eq(schema.orders.id, alloc.orderId) }) : undefined;
-        await emit("payout", { step: status, netCents: p.netCents, payoutItemId: r.payout_item_id }, { rfqId: order?.rfqId, orderId: order?.id });
+        await emit("payout", { step: status, allocationId, netCents: p.netCents, payoutItemId: r.payout_item_id }, { rfqId: order?.rfqId, orderId: order?.id });
       }
       return `payout ${status}`;
     }
