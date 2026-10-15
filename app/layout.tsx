@@ -37,9 +37,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/buy/new" className="rounded-md px-3 py-1.5 text-muted transition hover:bg-sunken hover:text-ink">
                 Buy
               </Link>
-              <span className="hidden rounded-md px-3 py-1.5 text-faint sm:inline" title="Coming soon">
+              <Link href="/sell" className="rounded-md px-3 py-1.5 text-muted transition hover:bg-sunken hover:text-ink">
                 Sell
-              </span>
+              </Link>
               <span className="hidden rounded-md px-3 py-1.5 text-faint sm:inline" title="Coming soon">
                 Ledger
               </span>

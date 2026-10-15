@@ -82,7 +82,7 @@ export default function Home() {
             <ButtonLink href="/buy/new" className="px-5 py-3 text-base">
               I need something
             </ButtonLink>
-            <ButtonLink href="/buy/new" variant="secondary" className="px-5 py-3 text-base">
+            <ButtonLink href="/sell" variant="secondary" className="px-5 py-3 text-base">
               I&apos;m a merchant
             </ButtonLink>
           </div>
