@@ -5,6 +5,7 @@ import {
   pgEnum,
   pgTable,
   real,
+  serial,
   text,
   timestamp,
   uuid,
@@ -230,6 +231,16 @@ export const payouts = pgTable("payouts", {
   netCents: integer("net_cents").notNull(),
   status: payoutStatus("status").notNull().default("pending"),
   ...timestamps,
+});
+
+// Append-only feed that drives the live UI (SSE polls by serial id, so it works across processes).
+export const events = pgTable("events", {
+  seq: serial("seq").primaryKey(),
+  rfqId: uuid("rfq_id"),
+  orderId: uuid("order_id"),
+  kind: text("kind").notNull(),
+  payload: jsonb("payload").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const firewallDecision = pgEnum("firewall_decision", ["allow", "deny", "needs_human"]);
