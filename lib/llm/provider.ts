@@ -6,7 +6,7 @@ import type { z } from "zod";
 export type Tier = "fast" | "smart";
 
 const DEFAULTS = {
-  google: { fast: "gemini-2.5-flash", smart: "gemini-2.5-flash" },
+  google: { fast: "gemini-3.5-flash-lite", smart: "gemini-3.8-flash" },
   anthropic: { fast: "claude-haiku-5-5", smart: "claude-sonnet-5-5" },
 } as const;
 
