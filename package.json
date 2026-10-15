@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx --env-file=.env scripts/seed.ts",
-    "webhook:register": "tsx --env-file=.env scripts/register-webhook.ts"
+    "webhook:register": "tsx --env-file=.env scripts/register-webhook.ts",
+    "e2e:sandbox": "tsx scripts/e2e-sandbox.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
