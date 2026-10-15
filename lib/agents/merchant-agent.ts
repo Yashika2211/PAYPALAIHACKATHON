@@ -216,11 +216,17 @@ export async function merchantReply(
     });
     if (r.source === "fallback" || !r.value) break;
 
+    // Code-enforced ceilings: never above list, never above this merchant's own previous price.
+    const prevUnit = new Map(turn.previous?.lines.map((l) => [l.catalogItemId, l.unitPriceCents]));
     const lines: OfferLine[] = r.value.lines.map((l) => ({
       catalogItemId: l.catalogItemId,
       name: list.get(l.catalogItemId)?.name ?? "unknown",
       quantity: l.quantity,
-      unitPriceCents: Math.min(l.unitPriceCents, list.get(l.catalogItemId)?.listPriceCents ?? l.unitPriceCents),
+      unitPriceCents: Math.min(
+        l.unitPriceCents,
+        list.get(l.catalogItemId)?.listPriceCents ?? l.unitPriceCents,
+        prevUnit.get(l.catalogItemId) ?? Infinity,
+      ),
     }));
     const offer = buildOffer(merchant, turn, lines, r.value.message, r.value.terms);
     const check = checkOffer(offer, floors);
