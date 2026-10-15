@@ -60,7 +60,7 @@ export function MerchantOnboarding({ defaultPayoutEmail }: { defaultPayoutEmail:
   const [live, setLive] = useState<{ merchantId: string; greeting: string } | null>(null);
   const nextId = useRef(1000);
 
-  async function extract(input: { file?: File; text?: string }) {
+  async function extract(input: { file?: File; text?: string; sampleId?: string }) {
     setBusy("extract");
     setError("");
     try {
@@ -72,12 +72,12 @@ export function MerchantOnboarding({ defaultPayoutEmail }: { defaultPayoutEmail:
       }
       const data = await post<{ businessName: string | null; category: string; items: Omit<Row, "id">[]; source: string; model: string | null }>(
         "/api/catalog/extract",
-        { file, text: input.text },
+        { file, text: input.text, sampleId: input.sampleId },
       );
       setRows(data.items.map((it, i) => ({ ...it, id: i + 1 })));
       if (data.businessName) setName(data.businessName.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\B\w+/g, (w) => w.toLowerCase()));
       setCategory(data.category || "catering");
-      setSource(data.source === "llm" ? `Read by ${data.model}` : "Parsed without AI");
+      setSource(data.source === "llm" ? `Read by ${data.model}` : data.source === "cache" ? `Cached read by ${data.model}` : "Parsed without AI");
       setPhase("edit");
     } catch (e) {
       setError((e as Error).message);
@@ -255,7 +255,7 @@ export function MerchantOnboarding({ defaultPayoutEmail }: { defaultPayoutEmail:
             <Button
               variant="secondary"
               disabled={busy === "extract"}
-              onClick={async () => extract({ file: await fileFromUrl("/demo/menu.jpg", "menu.jpg") })}
+              onClick={async () => extract({ file: await fileFromUrl("/demo/menu.jpg", "menu.jpg"), sampleId: "menu" })}
             >
               Use sample paper menu
             </Button>

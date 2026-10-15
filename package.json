@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
@@ -13,9 +13,13 @@
     "db:up": "docker compose up -d --wait",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx --env-file=.env scripts/seed.ts",
-    "webhook:register": "tsx --env-file=.env scripts/register-webhook.ts",
-    "e2e:sandbox": "tsx scripts/e2e-sandbox.ts"
+    "db:seed": "tsx --env-file-if-exists=.env scripts/seed.ts",
+    "webhook:register": "tsx --env-file-if-exists=.env scripts/register-webhook.ts",
+    "e2e:sandbox": "tsx scripts/e2e-sandbox.ts",
+    "db:reset": "tsx --env-file-if-exists=.env scripts/seed.ts --reset",
+    "cron:expire": "tsx --env-file-if-exists=.env scripts/cron-expire.ts",
+    "e2e": "playwright test",
+    "setup": "docker compose up -d --wait && drizzle-kit migrate && tsx --env-file-if-exists=.env scripts/seed.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
@@ -46,5 +50,8 @@
     "typescript": "^5",
     "vitest": "^5.0.4"
   },
-  "packageManager": "pnpm@12.5.1"
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=20"
+  }
 }

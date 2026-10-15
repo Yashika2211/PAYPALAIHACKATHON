@@ -95,7 +95,14 @@ const MERCHANTS: Array<{
 ];
 
 async function main() {
-  // Re-seeding wipes demo data; real PayPal records stay in PayPal.
+  const reset = process.argv.includes("--reset");
+  const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count from merchants`;
+  if (count > 0 && !reset) {
+    console.log(`already seeded (${count} merchants); pass --reset to wipe demo data and reseed`);
+    await sql.end();
+    return;
+  }
+  // Wipes demo data only; real PayPal records stay in PayPal.
   await sql`TRUNCATE merchants, rfqs, paypal_events, paypal_api_calls, firewall_decisions, events RESTART IDENTITY CASCADE`;
 
   for (const m of MERCHANTS) {

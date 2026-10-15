@@ -1,0 +1,71 @@
+# Render Blueprint: web app + scheduled job + managed Postgres.
+# Deploy: Render Dashboard → New → Blueprint → pick this repo. Fill the `sync: false` secrets when prompted.
+envVarGroups:
+  - name: haggle-secrets
+    envVars:
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: GOOGLE_GENERATIVE_AI_API_KEY
+        sync: false
+      - key: SANDBOX_BUYER_EMAIL
+        sync: false
+      - key: SANDBOX_PLATFORM_EMAIL
+        sync: false
+      - key: SANDBOX_MERCHANT_EMAILS
+        sync: false
+      - key: MANDATE_SIGNING_SECRET
+        generateValue: true
+      - key: PAYPAL_ENV
+        value: sandbox
+      - key: LLM_PROVIDER
+        value: google
+      - key: DEMO_MODE
+        value: "true"
+      - key: NODE_VERSION
+        value: "22"
+
+services:
+  - type: web
+    name: haggle
+    runtime: node
+    plan: starter # always-on, so PayPal webhooks and SSE streams never hit a cold start
+    region: oregon
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    preDeployCommand: pnpm db:migrate && pnpm db:seed
+    startCommand: pnpm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: haggle-db
+          property: connectionString
+      - fromGroup: haggle-secrets
+
+  # Expires lapsed mandates and releases PayPal holds that waited too long for delivery.
+  - type: cron
+    name: haggle-expire-holds
+    runtime: node
+    plan: starter
+    region: oregon
+    schedule: "*/30 * * * *"
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm cron:expire
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: haggle-db
+          property: connectionString
+      - fromGroup: haggle-secrets
+
+databases:
+  - name: haggle-db
+    plan: basic-256mb
+    region: oregon
+    databaseName: haggle
+    user: haggle
+    postgresMajorVersion: "16"

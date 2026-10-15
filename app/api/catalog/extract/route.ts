@@ -12,6 +12,7 @@ const Body = z.object({
       mediaType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
     })
     .optional(),
+  sampleId: z.enum(["menu"]).optional(),
 });
 
 export async function POST(req: Request) {
@@ -20,7 +21,12 @@ export async function POST(req: Request) {
     if (!body.text?.trim() && !body.file) throw new Error("Upload a menu photo or PDF, or paste your price list.");
     const live = await db.selectDistinct({ category: schema.merchants.category }).from(schema.merchants).where(eq(schema.merchants.status, "live"));
     const known = [...new Set(["catering", "bakery", "printing", "flowers", ...live.map((r) => r.category)])];
-    const result = await extractCatalog({ ...body, knownCategories: known });
+    const result = await extractCatalog({
+      text: body.text,
+      file: body.file,
+      knownCategories: known,
+      cacheKey: body.sampleId ? `extract:sample:${body.sampleId}` : undefined,
+    });
     if (result.value.items.length === 0) {
       throw new Error(result.source === "fallback" ? "AI is busy and the text had no recognizable prices. Try again or paste lines like “Veg wrap ... $9.50 each”." : "No priced items found. Try a clearer photo.");
     }

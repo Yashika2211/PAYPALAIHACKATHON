@@ -256,3 +256,11 @@ export const firewallDecisions = pgTable("firewall_decisions", {
   injectionFlags: text("injection_flags").array().notNull().default([]),
   ...timestamps,
 });
+
+// Last good structured answer per input, replayed only when every live model fails.
+export const llmCache = pgTable("llm_cache", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  model: text("model").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

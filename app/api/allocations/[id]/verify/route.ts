@@ -9,6 +9,7 @@ import { captureAllocation } from "@/lib/orders";
 const Body = z.object({
   photo: z.object({ base64: z.string().max(8_000_000), mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]) }),
   thumbnail: z.string().max(400_000).optional(),
+  sampleId: z.enum(["badges", "lunch", "tandoor", "short"]).optional(),
 });
 
 /** Merchant uploads a fulfilment photo; the AI check decides whether the system may capture on its own. */
@@ -20,7 +21,12 @@ export async function POST(req: Request, ctx: RouteContext<"/api/allocations/[id
     if (!alloc) throw new Error("Order line not found");
     if (alloc.state !== "authorized") throw new Error(`This line is already ${alloc.state}`);
 
-    const verdict = await verifyDelivery({ description: alloc.description, photo: body.photo });
+    const verdict = await verifyDelivery({
+      description: alloc.description,
+      photo: body.photo,
+      // Bundled demo photos re-encode differently per browser, so key them by name.
+      cacheKey: body.sampleId ? `verify:sample:${body.sampleId}:${alloc.description}` : undefined,
+    });
     await db
       .update(schema.merchantAllocations)
       .set({ verifierResult: verdict, deliveryPhotoUrl: body.thumbnail ?? null })

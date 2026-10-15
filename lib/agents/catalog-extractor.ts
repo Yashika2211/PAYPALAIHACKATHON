@@ -21,6 +21,8 @@ export interface ExtractInput {
   text?: string;
   file?: { base64: string; mediaType: string };
   knownCategories: readonly string[];
+  /** Stable cache key for bundled sample files. */
+  cacheKey?: string;
 }
 
 const LINE = /^(.*?)(\.{2,}|\s[-–—:]\s|:\s|\s)\s*(\$)?\s?(\d{1,4}(?:\.\d{2})?)\s*(each|ea\.?|per person|pp|per dozen|dozen|per tray|per box|per piece)?\s*$/i;
@@ -78,6 +80,7 @@ export async function extractCatalog(input: ExtractInput) {
     system,
     messages: [{ role: "user", content }],
     timeoutMs: 45_000,
+    cacheKey: input.cacheKey,
     fallback: () => ({ businessName: null, category: input.knownCategories[0] ?? "catering", items: fallbackItems }),
   });
   result.value.items = result.value.items.map((i) => ({ ...i, dietaryTags: normalizeTags(i.dietaryTags) }));

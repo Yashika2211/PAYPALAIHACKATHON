@@ -6,7 +6,7 @@ export const Verdict = z.object({
   confidence: z.number().min(0).max(1),
   reason: z.string(),
 });
-export type Verdict = z.infer<typeof Verdict> & { source: "llm" | "fallback"; model?: string };
+export type Verdict = z.infer<typeof Verdict> & { source: "llm" | "cache" | "fallback"; model?: string };
 
 /** Minimum confidence for the system to capture without a human. */
 export const AUTO_CAPTURE_CONFIDENCE = 0.7;
@@ -16,7 +16,7 @@ export const AUTO_CAPTURE_CONFIDENCE = 0.7;
  * the capture decision: the firewall still requires deliveryVerified, and a human
  * can override either way.
  */
-export async function verifyDelivery(args: { description: string; photo: { base64: string; mediaType: string } }): Promise<Verdict> {
+export async function verifyDelivery(args: { description: string; photo: { base64: string; mediaType: string }; cacheKey?: string }): Promise<Verdict> {
   const r = await structured({
     tier: "smart",
     schema: Verdict,
@@ -36,6 +36,7 @@ export async function verifyDelivery(args: { description: string; photo: { base6
       },
     ],
     timeoutMs: 40_000,
+    cacheKey: args.cacheKey,
     fallback: () => ({ pass: false, confidence: 0, reason: "Automatic photo check unavailable. A person needs to confirm delivery." }),
   });
   return { ...r.value, source: r.source, model: r.model };

@@ -537,11 +537,16 @@ function AllocationRow({ a, merchant, payout, busy, run }: { a: Allocation; merc
       ? "/demo/delivery-tandoor.jpg"
       : "/demo/delivery-lunch.jpg";
 
-  const submitPhoto = (getFile: () => Promise<File>) =>
+  const submitPhoto = (getFile: () => Promise<File>, sampleId?: string) =>
     run(`photo-${a.id}`, async () => {
       const prepared = await prepareUpload(await getFile(), 1400);
-      await api(`/api/allocations/${a.id}/verify`, { photo: { base64: prepared.base64, mediaType: prepared.mediaType }, thumbnail: prepared.thumbnail });
+      await api(`/api/allocations/${a.id}/verify`, {
+        photo: { base64: prepared.base64, mediaType: prepared.mediaType },
+        thumbnail: prepared.thumbnail,
+        sampleId,
+      });
     });
+  const sampleId = sample.includes("badges") ? "badges" : sample.includes("tandoor") ? "tandoor" : "lunch";
 
   return (
     <li className="px-5 py-4">
@@ -570,7 +575,9 @@ function AllocationRow({ a, merchant, payout, busy, run }: { a: Allocation; merc
             <div className="min-w-0">
               <p className={cx("font-medium", v.pass ? "text-good" : "text-warn")}>
                 {v.pass ? "Delivery verified by AI" : "AI could not verify this delivery"}
-                <span className="figures ml-2 text-xs font-normal text-muted">{Math.round(v.confidence * 100)}% confident</span>
+                <span className="figures ml-2 text-xs font-normal text-muted">
+                  {Math.round(v.confidence * 100)}% confident{v.source === "cache" ? " · cached AI answer" : ""}
+                </span>
               </p>
               <p className="text-muted">{v.reason}</p>
             </div>
@@ -594,11 +601,11 @@ function AllocationRow({ a, merchant, payout, busy, run }: { a: Allocation; merc
             <Button variant="good" className="px-3 py-1.5 text-xs" disabled={!!busy} onClick={() => fileRef.current?.click()}>
               {busy === `photo-${a.id}` ? "Checking photo…" : "Merchant: upload delivery photo"}
             </Button>
-            <Button variant="secondary" className="px-3 py-1.5 text-xs" disabled={!!busy} onClick={submitPhoto(() => fileFromUrl(sample, "delivery.jpg"))}>
+            <Button variant="secondary" className="px-3 py-1.5 text-xs" disabled={!!busy} onClick={submitPhoto(() => fileFromUrl(sample, "delivery.jpg"), sampleId)}>
               Use sample delivery photo
             </Button>
             {sample.includes("badges") && (
-              <Button variant="ghost" className="px-3 py-1.5 text-xs" disabled={!!busy} onClick={submitPhoto(() => fileFromUrl("/demo/delivery-short.jpg", "short.jpg"))}>
+              <Button variant="ghost" className="px-3 py-1.5 text-xs" disabled={!!busy} onClick={submitPhoto(() => fileFromUrl("/demo/delivery-short.jpg", "short.jpg"), "short")}>
                 Try a short delivery
               </Button>
             )}
