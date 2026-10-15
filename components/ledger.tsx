@@ -106,7 +106,7 @@ export function Ledger() {
       {
         field: "ts",
         headerName: "Time",
-        width: 110,
+        width: 124,
         sort: "desc",
         cellClass: "figures text-muted",
         valueFormatter: (p) => (p.value ? new Date(p.value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""),
@@ -123,7 +123,7 @@ export function Ledger() {
         enableCellChangeFlash: true,
         valueFormatter: (p) => (p.value == null ? "" : formatUsd(p.value)),
       },
-      { field: "status", headerName: "Status", width: 150, cellRenderer: StatusCell, enableCellChangeFlash: true },
+      { field: "status", headerName: "Status", width: 178, cellRenderer: StatusCell, enableCellChangeFlash: true },
       { colId: "rounds", headerName: "Rounds", width: 130, sortable: false, cellRenderer: SparklineCell, valueGetter: (p) => p.data?.rounds?.join(",") ?? "" },
       { field: "detail", headerName: "Detail", flex: 1, minWidth: 240, tooltipField: "detail", cellClass: "text-muted" },
       { field: "rfqId", headerName: "Request", width: 104, hide: true, cellClass: "figures text-muted", valueFormatter: (p) => (p.value ? String(p.value).slice(0, 8) : "") },

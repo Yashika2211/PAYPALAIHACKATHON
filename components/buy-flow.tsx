@@ -530,7 +530,12 @@ type Runner = (label: string, fn: () => Promise<unknown>) => () => Promise<void>
 function AllocationRow({ a, merchant, payout, busy, run }: { a: Allocation; merchant: string; payout?: Snapshot["payouts"][number]; busy: string; run: Runner }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const v = a.verifierResult;
-  const sample = /badge|print/i.test(a.description) ? "/demo/delivery-badges.jpg" : "/demo/delivery-lunch.jpg";
+  // Demo photos that match each seeded merchant's order; real merchants upload their own.
+  const sample = /badge|print/i.test(a.description)
+    ? "/demo/delivery-badges.jpg"
+    : /tandoor|chana|butter chicken/i.test(`${merchant} ${a.description}`)
+      ? "/demo/delivery-tandoor.jpg"
+      : "/demo/delivery-lunch.jpg";
 
   const submitPhoto = (getFile: () => Promise<File>) =>
     run(`photo-${a.id}`, async () => {
