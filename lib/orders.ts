@@ -233,6 +233,32 @@ export async function payoutAllocation(allocationId: string) {
   );
 }
 
+/** Re-sends a failed or unclaimed payout to the merchant's current payout email. */
+export async function retryPayout(allocationId: string) {
+  const payout = await db.query.payouts.findFirst({ where: eq(schema.payouts.allocationId, allocationId) });
+  if (!payout) throw new Error("No payout for this allocation");
+  if (payout.status !== "failed" && payout.status !== "unclaimed") throw new Error(`Payout is ${payout.status}`);
+  const alloc = await db.query.merchantAllocations.findFirst({ where: eq(schema.merchantAllocations.id, allocationId) });
+  const merchant = await db.query.merchants.findFirst({ where: eq(schema.merchants.id, payout.merchantId) });
+  const order = alloc && (await db.query.orders.findFirst({ where: eq(schema.orders.id, alloc.orderId) }));
+  if (!alloc || !merchant || !order) throw new Error("Payout records are incomplete");
+
+  const batch = await pp.createPayout({
+    senderBatchId: `payout-${allocationId}-retry-${Date.now()}`,
+    orderId: order.id,
+    items: [{ allocationId, email: merchant.payoutEmail, netCents: payout.netCents, note: `Haggle order ${order.id.slice(0, 8)} (retry): ${alloc.description}` }],
+  });
+  await db
+    .update(schema.payouts)
+    .set({ status: "pending", payoutBatchId: batch.batch_header.payout_batch_id, payoutItemId: batch.items?.[0]?.payout_item_id })
+    .where(eq(schema.payouts.id, payout.id));
+  await emit(
+    "payout",
+    { step: "retried", merchant: merchant.name, netCents: payout.netCents, batchId: batch.batch_header.payout_batch_id },
+    { rfqId: order.rfqId, orderId: order.id },
+  );
+}
+
 /** Voids whatever is still held: undelivered goods are never charged. */
 export async function voidRemaining(orderId: string) {
   const { order, allocations } = await loadOrder(orderId);

@@ -476,12 +476,17 @@ function BundlePanel({
                 <p className="truncate text-sm text-muted">{a.description.replace(/^[^:]+:\s*/, "")}</p>
                 {payout && (
                   <p className="figures mt-1 text-xs text-muted">
-                    payout {formatUsd(payout.netCents)} · fee {formatUsd(payout.feeCents)} · <span className={payout.status === "succeeded" ? "text-good" : ""}>{payout.status}</span>
+                    payout {formatUsd(payout.netCents)} · fee {formatUsd(payout.feeCents)} · <span className={payout.status === "succeeded" ? "text-good" : payout.status === "failed" ? "text-bad" : ""}>{payout.status}</span>
                   </p>
                 )}
               </div>
               <Money cents={a.amountCents} className="text-lg" />
               <StatePill state={a.state} />
+              {payout && (payout.status === "failed" || payout.status === "unclaimed") && (
+                <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={run(`retry-${a.id}`, () => api(`/api/allocations/${a.id}/retry-payout`, {}))} disabled={!!busy}>
+                  {busy === `retry-${a.id}` ? "Retrying…" : "Retry payout"}
+                </Button>
+              )}
               {a.state === "authorized" && (
                 <Button variant="good" className="px-3 py-1.5 text-xs" onClick={run(a.id, () => api(`/api/allocations/${a.id}/deliver`, {}))} disabled={!!busy}>
                   {busy === a.id ? "Capturing…" : "Mark delivered"}
@@ -629,6 +634,7 @@ const PAYPAL_STEP: Record<string, string> = {
   sent: "Payout sent",
   succeeded: "Payout succeeded",
   failed: "Payout failed",
+  retried: "Payout re-sent",
   unclaimed: "Payout unclaimed",
 };
 

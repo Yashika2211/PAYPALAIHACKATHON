@@ -3,7 +3,12 @@ import { db, schema, sql } from "../lib/db/client";
 // Floors are private to the negotiation engine and never shown to an LLM.
 type SeedItem = [name: string, unit: string, listCents: number, floorCents: number, tags: string[]];
 
-const emails = (process.env.SANDBOX_MERCHANT_EMAILS ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+const platform = (process.env.SANDBOX_PLATFORM_EMAIL ?? "").trim().toLowerCase();
+// Never pay the platform account itself: PayPal rejects it with SELF_PAY_NOT_ALLOWED.
+const emails = (process.env.SANDBOX_MERCHANT_EMAILS ?? "")
+  .split(",")
+  .map((e) => e.trim())
+  .filter((e) => e && e.toLowerCase() !== platform);
 const email = (i: number) => emails[i % Math.max(emails.length, 1)] ?? `merchant${i}@example.com`;
 
 const MERCHANTS: Array<{
