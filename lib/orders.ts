@@ -244,6 +244,7 @@ export async function applyVoid(authorizationId: string) {
 
 /** Idempotent webhook processing. Returns a short description of what was applied. */
 export async function processWebhookEvent(event: WebhookEvent): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PayPal resource shapes vary by event type
   const r = event.resource as Record<string, any>;
   switch (event.event_type) {
     case "CHECKOUT.ORDER.APPROVED": {

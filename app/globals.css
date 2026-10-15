@@ -1,26 +1,160 @@
 @import "tailwindcss";
 
+/* Haggle: "market ledger". Paper, ink, one vermilion accent, mono figures. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #f4f1ea;
+  --surface: #fffdf8;
+  --sunken: #ece8de;
+  --ink: #17150f;
+  --muted: #6b665a;
+  --faint: #9a9486;
+  --line: #ddd7c9;
+  --line-strong: #c9c1ae;
+  --accent: #e4501b;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbe3d8;
+  --good: #1c7a4b;
+  --good-soft: #dcefe3;
+  --bad: #c0301d;
+  --bad-soft: #f8dcd6;
+  --warn: #a8690f;
+  --warn-soft: #f6e8cc;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --paper: #11100d;
+    --surface: #1a1915;
+    --sunken: #0c0b09;
+    --ink: #f1ede3;
+    --muted: #a39d90;
+    --faint: #6f6a60;
+    --line: #2d2b25;
+    --line-strong: #3f3c34;
+    --accent: #ff6a35;
+    --accent-ink: #1a0a03;
+    --accent-soft: #3a1a0d;
+    --good: #48b97f;
+    --good-soft: #13281d;
+    --bad: #ff6b55;
+    --bad-soft: #3a1510;
+    --warn: #e2a94a;
+    --warn-soft: #33260f;
+    color-scheme: dark;
   }
 }
 
+:root[data-theme="dark"] {
+  --paper: #11100d;
+  --surface: #1a1915;
+  --sunken: #0c0b09;
+  --ink: #f1ede3;
+  --muted: #a39d90;
+  --faint: #6f6a60;
+  --line: #2d2b25;
+  --line-strong: #3f3c34;
+  --accent: #ff6a35;
+  --accent-ink: #1a0a03;
+  --accent-soft: #3a1a0d;
+  --good: #48b97f;
+  --good-soft: #13281d;
+  --bad: #ff6b55;
+  --bad-soft: #3a1510;
+  --warn: #e2a94a;
+  --warn-soft: #33260f;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-serif-display);
+}
+
+html {
+  background: var(--paper);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--paper);
+  color: var(--ink);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+}
+
+.figures {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes flash-bad {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  30% {
+    box-shadow: 0 0 0 4px var(--bad-soft);
+  }
+}
+.flash-bad {
+  animation: flash-bad 1.2s ease-out 2;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .flash-bad,
+  .pulse-dot {
+    animation: none;
+  }
 }
