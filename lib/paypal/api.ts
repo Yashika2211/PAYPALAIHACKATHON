@@ -1,0 +1,202 @@
+import { paypalRequest } from "./client";
+
+export const toValue = (cents: number) => (cents / 100).toFixed(2);
+export const toCents = (value: string) => Math.round(Number(value) * 100);
+
+interface Link {
+  href: string;
+  rel: string;
+  method?: string;
+}
+
+export interface PayPalOrder {
+  id: string;
+  status: "CREATED" | "SAVED" | "APPROVED" | "VOIDED" | "COMPLETED" | "PAYER_ACTION_REQUIRED";
+  links: Link[];
+  purchase_units?: Array<{
+    reference_id?: string;
+    payments?: {
+      authorizations?: Array<{ id: string; status: string; amount: { value: string }; expiration_time?: string }>;
+    };
+  }>;
+}
+
+export interface Authorization {
+  id: string;
+  status: "CREATED" | "CAPTURED" | "DENIED" | "PARTIALLY_CAPTURED" | "VOIDED" | "PENDING";
+  amount: { currency_code: string; value: string };
+}
+
+export interface Capture {
+  id: string;
+  status: "COMPLETED" | "DECLINED" | "PARTIALLY_REFUNDED" | "PENDING" | "REFUNDED" | "FAILED";
+  amount: { currency_code: string; value: string };
+}
+
+export interface OrderLine {
+  merchantId: string;
+  name: string;
+  amountCents: number;
+}
+
+/**
+ * Orders v2: one AUTHORIZE purchase unit per bundle, one item per merchant.
+ * (Multi-unit AUTHORIZE is rejected by PayPal with UNSUPPORTED_INTENT.)
+ */
+export function createAuthorizeOrder(args: {
+  orderId: string;
+  lines: OrderLine[];
+  description: string;
+}) {
+  const total = args.lines.reduce((s, l) => s + l.amountCents, 0);
+  return paypalRequest<PayPalOrder>({
+    method: "POST",
+    path: "/v2/checkout/orders",
+    requestId: `order-create-${args.orderId}`,
+    orderId: args.orderId,
+    body: {
+      intent: "AUTHORIZE",
+      purchase_units: [
+        {
+          reference_id: args.orderId,
+          custom_id: args.orderId,
+          description: args.description.slice(0, 127),
+          soft_descriptor: "HAGGLE",
+          amount: {
+            currency_code: "USD",
+            value: toValue(total),
+            breakdown: { item_total: { currency_code: "USD", value: toValue(total) } },
+          },
+          items: args.lines.map((l) => ({
+            name: l.name.slice(0, 127),
+            sku: l.merchantId,
+            quantity: "1",
+            category: "PHYSICAL_GOODS",
+            unit_amount: { currency_code: "USD", value: toValue(l.amountCents) },
+          })),
+        },
+      ],
+      payment_source: {
+        paypal: {
+          experience_context: {
+            brand_name: "Haggle",
+            shipping_preference: "NO_SHIPPING",
+            user_action: "CONTINUE",
+          },
+        },
+      },
+    },
+  });
+}
+
+export function getOrder(paypalOrderId: string, orderId?: string) {
+  return paypalRequest<PayPalOrder>({ method: "GET", path: `/v2/checkout/orders/${paypalOrderId}`, orderId });
+}
+
+export function authorizeOrder(paypalOrderId: string, orderId: string) {
+  return paypalRequest<PayPalOrder>({
+    method: "POST",
+    path: `/v2/checkout/orders/${paypalOrderId}/authorize`,
+    requestId: `order-authorize-${orderId}`,
+    orderId,
+    body: {},
+  });
+}
+
+/** Payments v2: partial capture of one merchant's share. */
+export function captureAuthorization(args: {
+  authorizationId: string;
+  amountCents: number;
+  finalCapture: boolean;
+  requestId: string;
+  invoiceId: string;
+  orderId: string;
+  note: string;
+}) {
+  return paypalRequest<Capture>({
+    method: "POST",
+    path: `/v2/payments/authorizations/${args.authorizationId}/capture`,
+    requestId: args.requestId,
+    orderId: args.orderId,
+    body: {
+      amount: { currency_code: "USD", value: toValue(args.amountCents) },
+      final_capture: args.finalCapture,
+      invoice_id: args.invoiceId,
+      note_to_payer: args.note.slice(0, 255),
+    },
+  });
+}
+
+export function getAuthorization(authorizationId: string, orderId?: string) {
+  return paypalRequest<Authorization>({
+    method: "GET",
+    path: `/v2/payments/authorizations/${authorizationId}`,
+    orderId,
+  });
+}
+
+export function voidAuthorization(authorizationId: string, orderId: string) {
+  return paypalRequest<Authorization | null>({
+    method: "POST",
+    path: `/v2/payments/authorizations/${authorizationId}/void`,
+    requestId: `void-${authorizationId}`,
+    orderId,
+  });
+}
+
+export function reauthorize(authorizationId: string, amountCents: number, orderId: string) {
+  return paypalRequest<Authorization>({
+    method: "POST",
+    path: `/v2/payments/authorizations/${authorizationId}/reauthorize`,
+    requestId: `reauth-${authorizationId}-${Date.now()}`,
+    orderId,
+    body: { amount: { currency_code: "USD", value: toValue(amountCents) } },
+  });
+}
+
+export function refundCapture(captureId: string, amountCents: number, orderId: string, note: string) {
+  return paypalRequest<{ id: string; status: string }>({
+    method: "POST",
+    path: `/v2/payments/captures/${captureId}/refund`,
+    requestId: `refund-${captureId}-${amountCents}`,
+    orderId,
+    body: { amount: { currency_code: "USD", value: toValue(amountCents) }, note_to_payer: note.slice(0, 255) },
+  });
+}
+
+export interface PayoutBatch {
+  batch_header: { payout_batch_id: string; batch_status: string };
+  items?: Array<{ payout_item_id: string; transaction_status?: string; payout_item: { sender_item_id: string } }>;
+}
+
+/** Payouts v1: pay merchants their net share after capture. sender_batch_id dedupes per allocation set. */
+export function createPayout(args: {
+  senderBatchId: string;
+  orderId: string;
+  items: Array<{ allocationId: string; email: string; netCents: number; note: string }>;
+}) {
+  return paypalRequest<PayoutBatch>({
+    method: "POST",
+    path: "/v1/payments/payouts",
+    requestId: args.senderBatchId,
+    orderId: args.orderId,
+    body: {
+      sender_batch_header: {
+        sender_batch_id: args.senderBatchId,
+        email_subject: "You got paid through Haggle",
+        email_message: "Your Haggle order was delivered and captured.",
+      },
+      items: args.items.map((i) => ({
+        recipient_type: "EMAIL",
+        receiver: i.email,
+        sender_item_id: i.allocationId,
+        note: i.note.slice(0, 4000),
+        amount: { currency: "USD", value: toValue(i.netCents) },
+      })),
+    },
+  });
+}
+
+export function getPayoutBatch(batchId: string, orderId?: string) {
+  return paypalRequest<PayoutBatch>({ method: "GET", path: `/v1/payments/payouts/${batchId}`, orderId });
+}
