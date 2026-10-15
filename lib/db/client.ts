@@ -9,7 +9,7 @@ declare global {
 // Reuse one pool across hot reloads in dev.
 const sql =
   globalThis.__hagglePg ??
-  postgres(process.env.DATABASE_URL ?? "postgres://haggle:haggle@localhost:5432/haggle", {
+  postgres(process.env.DATABASE_URL ?? "postgres://haggle:haggle@localhost:5433/haggle", {
     max: 10,
   });
 if (process.env.NODE_ENV !== "production") globalThis.__hagglePg = sql;
