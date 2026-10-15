@@ -42,39 +42,59 @@ async function api<T>(url: string, body?: unknown): Promise<T> {
 
 const REFRESH_KINDS = ["bundle_ready", "bundle_failed", "paypal", "order_state", "payout", "mandate_signed", "quarantine", "negotiation_done"];
 
-/** Polls the append-only events feed. Merges by seq so duplicate or overlapping polls are harmless. */
+/**
+ * Live events over Server-Sent Events, with polling as a fallback if the stream
+ * fails. Events are merged by seq, so reconnects and overlaps are harmless.
+ */
 function useEvents(rfqId: string, onImportant: () => void) {
   const [events, setEvents] = useState<FeedEvent[]>([]);
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
     let after = 0;
-    let first = true;
-    const tick = async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let source: EventSource | null = null;
+
+    const merge = (fresh: FeedEvent[]) => {
+      if (!fresh.length || cancelled) return;
+      after = Math.max(after, fresh[fresh.length - 1].seq);
+      setEvents((prev) => {
+        const seen = new Set(prev.map((e) => e.seq));
+        const added = fresh.filter((e) => !seen.has(e.seq));
+        return added.length ? [...prev, ...added] : prev;
+      });
+      if (fresh.some((e) => REFRESH_KINDS.includes(e.kind))) onImportant();
+    };
+
+    const poll = async () => {
       try {
-        const { events: fresh } = await api<{ events: FeedEvent[] }>(`/api/rfqs/${rfqId}/events?after=${after}`);
-        if (cancelled) return;
-        if (fresh.length) {
-          after = fresh[fresh.length - 1].seq;
-          setEvents((prev) => {
-            const seen = new Set(prev.map((e) => e.seq));
-            const added = fresh.filter((e) => !seen.has(e.seq));
-            return added.length ? [...prev, ...added] : prev;
-          });
-          if (fresh.some((e) => REFRESH_KINDS.includes(e.kind))) onImportant();
-        }
-        if (first) {
-          first = false;
-          onImportant();
-        }
+        merge((await api<{ events: FeedEvent[] }>(`/api/rfqs/${rfqId}/events?after=${after}`)).events);
       } catch {
         /* transient; keep polling */
       }
-      if (!cancelled) timer = setTimeout(tick, 700);
+      if (!cancelled) timer = setTimeout(poll, 1000);
     };
-    tick();
+
+    onImportant(); // initial snapshot
+    if (typeof EventSource === "undefined") {
+      poll();
+    } else {
+      source = new EventSource(`/api/rfqs/${rfqId}/stream?after=0`);
+      source.onmessage = (m) => merge([JSON.parse(m.data) as FeedEvent]);
+      let failures = 0;
+      source.onerror = () => {
+        if (++failures >= 3 && source) {
+          source.close();
+          source = null;
+          poll();
+        }
+      };
+      source.onopen = () => {
+        failures = 0;
+      };
+    }
     return () => {
       cancelled = true;
+      source?.close();
       clearTimeout(timer);
     };
   }, [rfqId, onImportant]);
