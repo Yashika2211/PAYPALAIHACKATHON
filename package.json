@@ -20,6 +20,8 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
     "@ai-sdk/google": "^4.0.95",
+    "ag-grid-community": "^36.2.0",
+    "ag-grid-react": "^36.2.0",
     "ai": "^7.0.140",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.1",

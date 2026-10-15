@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#8a7f72;height:100vh;display:grid;place-items:center;font-family:Helvetica,Arial,sans-serif}
+.box{background:#d8c3a0;padding:26px;border-radius:6px;box-shadow:inset 0 0 40px rgba(0,0,0,.25),0 20px 40px rgba(0,0,0,.35);transform:rotate(1.5deg)}
+.grid{display:grid;grid-template-columns:repeat(8,96px);gap:10px}
+.b{background:#fff;border-radius:6px;height:118px;position:relative;box-shadow:0 2px 4px rgba(0,0,0,.25);overflow:hidden}
+.b:before{content:"";position:absolute;top:8px;left:50%;width:30px;height:7px;margin-left:-15px;border-radius:4px;background:#ddd}
+.b .band{position:absolute;top:24px;left:0;right:0;height:26px;background:#e4501b;color:#fff;font-size:11px;font-weight:700;text-align:center;line-height:26px;letter-spacing:1px}
+.b .n{position:absolute;top:58px;left:0;right:0;text-align:center;font-size:14px;font-weight:700;color:#222}
+.b .r{position:absolute;top:82px;left:0;right:0;text-align:center;font-size:11px;color:#666}
+.lan{position:absolute;top:-34px;left:50%;width:54px;height:44px;margin-left:-27px;border:5px solid #1f3f8f;border-bottom:none;border-radius:28px 28px 0 0}
+.b{overflow:visible !important;margin-top:34px}
+.label{margin-top:14px;font-size:14px;color:#3a2f22;font-weight:700}
+</style></head><body><div class="box"><div class="grid" id="g"></div><div class="label">ORDER #HG-40 · 40 × NAME BADGE WITH BLUE LANYARD · INKWELL PRINT CO.</div></div>
+<script>
+const names=["Aaron","Bea","Cyrus","Dina","Eli","Fay","Gio","Hugo","Iris","Jon","Kim","Leo","Mia","Ned","Ola","Pia","Raj","Sia","Tom","Uma","Aisha","Ben","Chloe","Dev","Elena","Farah","Gus","Hana","Ivan","Jade","Kofi","Lina","Mateo","Nora","Omar","Priya","Quinn","Rosa","Sam","Tara"];
+const roles=["Speaker","Attendee","Organizer","Attendee","Volunteer"];
+g.innerHTML=names.map((n,i)=>`<div class="b"><div class="lan"></div><div class="band">AI WORKSHOP</div><div class="n">${n}</div><div class="r">${roles[i%5]}</div></div>`).join("");
+</script></body></html>
