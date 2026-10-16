@@ -136,7 +136,7 @@ The `events` table is an append-only feed. The Negotiation Theater and the ledge
 git clone https://github.com/Yashika2211/PAYPALAIHACKATHON.git haggle && cd haggle
 cp .env.example .env          # fill PayPal sandbox + Gemini keys (see below)
 pnpm install
-pnpm setup                    # docker Postgres on :5433, migrations, seed
+pnpm bootstrap                # docker Postgres on :5433, migrations, seed
 pnpm dev                      # http://localhost:3000
 ```
 

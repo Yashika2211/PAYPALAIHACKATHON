@@ -19,7 +19,7 @@
     "db:reset": "tsx --env-file-if-exists=.env scripts/seed.ts --reset",
     "cron:expire": "tsx --env-file-if-exists=.env scripts/cron-expire.ts",
     "e2e": "playwright test",
-    "setup": "docker compose up -d --wait && drizzle-kit migrate && tsx --env-file-if-exists=.env scripts/seed.ts"
+    "bootstrap": "docker compose up -d --wait && drizzle-kit migrate && tsx --env-file-if-exists=.env scripts/seed.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
