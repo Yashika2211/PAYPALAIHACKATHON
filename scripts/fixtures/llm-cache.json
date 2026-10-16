@@ -83,5 +83,23 @@
       "businessName": "Tandoor & Tiffin"
     },
     "model": "gemini-3.8-flash"
+  },
+  {
+    "key": "k:verify:sample:lunch:Saffron & Sage Catering: 20× Vegetarian falafel lunch box, 20× Chicken shawarma lunch box",
+    "value": {
+      "pass": true,
+      "reason": "The image clearly shows 20 Vegetarian Falafel lunch boxes and 20 Chicken Shawarma lunch boxes, matching the order.",
+      "confidence": 0.98
+    },
+    "model": "gemini-3.5-flash"
+  },
+  {
+    "key": "k:verify:sample:short:Inkwell Print Co.: 40× Printed name badges with lanyards",
+    "value": {
+      "pass": false,
+      "reason": "The photo shows only 20 printed name badges instead of the ordered quantity of 40.",
+      "confidence": 0.95
+    },
+    "model": "gemini-3.5-flash-lite"
   }
 ]
