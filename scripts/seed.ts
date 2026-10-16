@@ -104,7 +104,7 @@ async function main() {
     return;
   }
   // Wipes demo data only; real PayPal records stay in PayPal.
-  await sql`TRUNCATE merchants, rfqs, paypal_events, paypal_api_calls, firewall_decisions, events RESTART IDENTITY CASCADE`;
+  await sql`TRUNCATE merchants, rfqs, paypal_events, paypal_api_calls, firewall_decisions, events, buyer_vault RESTART IDENTITY CASCADE`;
 
   for (const m of MERCHANTS) {
     const [merchant] = await db

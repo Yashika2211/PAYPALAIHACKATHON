@@ -123,19 +123,25 @@ if (await short.count()) {
   await caption("The print shop uploads a delivery photo… but only 20 of 40 badges.");
   await short.click();
   await page.getByText("AI could not verify this delivery").first().waitFor({ timeout: 120_000 });
+  await page.waitForFunction(() => !/Checking photo…/.test(document.body.innerText), null, { timeout: 120_000 });
   await scrollTo(page.getByText("AI could not verify this delivery").first());
   await caption("The AI catches the short delivery. Nothing is captured.");
   await pause(4500);
 }
-const lines = await upload.count();
-for (let i = 0; i < lines; i++) {
+// Wait for an in-flight photo check or capture to finish before the next click.
+const idle = () => page.waitForFunction(() => !/Checking photo…|Capturing…/.test(document.body.innerText), null, { timeout: 120_000 });
+await idle();
+for (let i = 0; i < 4 && (await upload.count()) > 0; i++) {
   await caption("A correct delivery photo: verified by AI, so that merchant's share is captured and paid out via PayPal Payouts.");
   await upload.first().click();
-  await page.locator("img[alt='Delivery photo']").nth(i).waitFor({ timeout: 120_000 }).catch(() => {});
-  await pause(3500);
-  const confirm = page.getByRole("button", { name: "Buyer: confirm delivered anyway" });
-  if (await confirm.count()) await confirm.first().click();
+  await pause(800);
+  await idle();
   await pause(2500);
+  const confirm = page.getByRole("button", { name: "Buyer: confirm delivered anyway" });
+  if ((await upload.count()) > 0 && (await confirm.count()) > 0 && !(await page.getByText("Delivery verified by AI").count())) {
+    await confirm.first().click();
+    await idle();
+  }
 }
 await scrollTo(page.getByText("PayPal timeline"));
 await caption("Every step is confirmed by signed PayPal webhooks.");

@@ -169,12 +169,13 @@ pnpm dev                      # http://localhost:3000
 | `MANDATE_SIGNING_SECRET` | any long random string: `openssl rand -hex 32` |
 | `PAYPAL_WEBHOOK_ID` | printed by `pnpm webhook:register https://<public-url>` |
 
-**Webhooks locally:**
-1. Run `cloudflared tunnel --url http://localhost:3000`.
-2. Run `pnpm webhook:register https://<the-trycloudflare-url>`.
-3. Put the printed id into `PAYPAL_WEBHOOK_ID`.
+**Webhooks locally:** run `pnpm tunnel` (needs `cloudflared`). It opens a public tunnel to `localhost:3000` and points the PayPal sandbox webhook at it. It also re-registers automatically whenever the tunnel drops, for example after the laptop sleeps.
 
-Without a tunnel, the app still settles correctly, because callbacks reconcile from PayPal's own responses through the same idempotent code path.
+Missed webhooks are not lost. PayPal retries them, and Haggle's maintenance sweep reconciles pending payouts directly with PayPal. The app also settles correctly with no tunnel at all, because API responses go through the same idempotent code path as webhooks.
+
+**Sandbox balance:** merchant Payouts are paid from the platform's sandbox balance. If payouts fail with `INSUFFICIENT_FUNDS`, run `pnpm sandbox:fund 2000` to top it up with the PayPal test card. Failed payouts are retried automatically.
+
+**Demo video:** `pnpm db:reset && pnpm demo:record` drives the full demo with captions and saves `demo-video/haggle-demo.webm`.
 
 **Tests:**
 

@@ -22,7 +22,10 @@
 - [x] Invoicing v2 net terms via the PayPal Agent Toolkit, firewall-wrapped tools (`pnpm e2e:invoice`, verified in sandbox)
 - [x] MCP server for external AI agents under mandate rules (`pnpm mcp:smoke`)
 - [x] Voice dictation on the request box; folded transcripts; mobile pass
-- [ ] Re-run the billing agent's LLM path once the Gemini quota resets (fallback path verified)
+- [x] Billing agent LLM path verified live (gemini-3.5-flash-lite drove the Agent Toolkit end to end)
+- [x] Payout failures recorded, shown and auto-retried; missed payout webhooks reconciled with PayPal
+- [x] Self-healing local webhook tunnel (`pnpm tunnel`), sandbox balance top-up (`pnpm sandbox:fund`)
+- [x] Demo video recorder; a 2:13 take is saved at demo-video/haggle-demo.webm (re-record with fresh AI quota for the final upload)
 
 ## Changed from the original plan
 - Multi purchase-unit AUTHORIZE → one purchase unit, itemized per merchant, per-merchant partial captures (PayPal limitation)
