@@ -144,7 +144,8 @@ export async function structured<S extends z.ZodType>(args: {
     }
   }
 
-  if (chain.length) {
+  // Replay recorded answers when live models failed, or in demo mode with AI switched off.
+  if (chain.length || process.env.DEMO_MODE === "true") {
     const cached = await readCache(key);
     if (cached) return { value: args.schema.parse(cached.value), source: "cache", model: cached.model, error: lastError };
   }

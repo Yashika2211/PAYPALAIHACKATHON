@@ -148,12 +148,27 @@ await caption("Every step is confirmed by signed PayPal webhooks.");
 await pause(5000);
 log("settlement");
 
+// Repeat purchase under the auto-approve limit: the agent pays on its own with the Vault card.
+await page.goto(`${BASE}/buy/new`, { waitUntil: "networkidle" });
+await page.getByRole("button", { name: /25 printed name badges/ }).click();
+await caption("Next week, a small repeat order, under the buyer's $200 auto-approve limit…");
+await pause(2000);
+await page.getByRole("button", { name: /Plan my request/ }).click();
+await page.getByRole("button", { name: "Sign mandate" }).click({ timeout: 90_000 });
+await page.getByRole("button", { name: /Start negotiating/ }).click({ timeout: 20_000 });
+const agentPaid = page.getByText("Agent paid", { exact: true }).first();
+await agentPaid.waitFor({ timeout: 240_000 });
+await scrollTo(agentPaid);
+await caption("…so the agent pays on its own with the card saved in PayPal Vault. Above the limit, the firewall makes it ask.");
+await pause(5500);
+log("auto-pay");
+
 // 2:15 Ledger
 await page.goto(`${BASE}/ledger`, { waitUntil: "networkidle" });
 await caption("The ledger: every quote, firewall decision, capture, payout and fee, live in AG Grid.");
 await pause(4500);
 await page.getByLabel("Quick filter").fill("Inkwell");
-await pause(2500);
+await pause(2000);
 await page.getByLabel("Quick filter").fill("");
 await page.getByText("Group by order").click();
 await pause(3000);
@@ -161,6 +176,8 @@ log("ledger");
 
 // 2:35 Close
 await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+await caption("Any AI agent can shop here too: Haggle is an MCP server, with the same mandate rules.");
+await pause(3500);
 await caption("Haggle: agentic commerce you can trust, on PayPal.");
 await pause(6000);
 log("done");
