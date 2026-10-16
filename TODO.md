@@ -17,10 +17,12 @@
 - [ ] Devpost: paste docs/DEVPOST.md, add sandbox buyer password in the private testing notes
 - [ ] Optional: add 1–2 more free Gemini keys (separate projects) comma-separated for more quota
 
-## Stretch (M8)
-- [ ] Vault: save PayPal for auto-approve under the mandate threshold (needs "Save payment methods" enabled on the app)
-- [ ] Invoicing v2 for B2B net terms (needs "Invoicing" enabled on the app)
-- [ ] MCP server exposing merchant agents to external AI agents under mandate rules
+## Stretch (M8): done
+- [x] Vault: save a method for the agent; agent auto-pays at/under the mandate threshold, asks above it (`pnpm e2e:vault`, verified in sandbox)
+- [x] Invoicing v2 net terms via the PayPal Agent Toolkit, firewall-wrapped tools (`pnpm e2e:invoice`, verified in sandbox)
+- [x] MCP server for external AI agents under mandate rules (`pnpm mcp:smoke`)
+- [x] Voice dictation on the request box; folded transcripts; mobile pass
+- [ ] Re-run the billing agent's LLM path once the Gemini quota resets (fallback path verified)
 
 ## Changed from the original plan
 - Multi purchase-unit AUTHORIZE → one purchase unit, itemized per merchant, per-merchant partial captures (PayPal limitation)
