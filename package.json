@@ -23,11 +23,13 @@
     "cache:export": "tsx --env-file-if-exists=.env scripts/cache-export.ts",
     "demo:record": "node scripts/record-demo.mjs",
     "e2e:vault": "tsx scripts/e2e-vault.ts",
-    "e2e:invoice": "tsx scripts/e2e-invoice.ts"
+    "e2e:invoice": "tsx scripts/e2e-invoice.ts",
+    "mcp:smoke": "tsx scripts/mcp-smoke.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
     "@ai-sdk/google": "^4.0.95",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@paypal/agent-toolkit": "^1.11.0",
     "ag-grid-community": "^36.2.0",
     "ag-grid-react": "^36.2.0",
