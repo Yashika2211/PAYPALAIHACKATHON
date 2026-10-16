@@ -47,6 +47,16 @@ And agents can't be trusted with money. There is no enforceable way to say *"spe
 4. **Injection detection is a tripwire, not the wall.** Merchant messages are scanned for instruction-like content (`lib/policy/injection.ts`); a hit blocks the offer and quarantines the merchant. Even if detection missed something, step 1 means a forged "authorization" still can't spend a cent.
 5. **Every decision is logged** to `firewall_decisions` and shown live in the UI and the ledger.
 
+## Security notes
+
+- **Secrets and card data:**
+  - Secrets live only in environment variables.
+  - Every PayPal request and response is logged with tokens and CVV removed, card numbers reduced to the last 4 digits, Vault tokens and expiry partially masked, and emails masked ([`lib/paypal/redact.ts`](lib/paypal/redact.ts), 100% tested). `pnpm logs:scrub` re-applies the rules to stored logs.
+- **Webhooks:** every webhook is verified with PayPal's `verify-webhook-signature` before it is stored or processed. Local replay is accepted only outside production.
+- **Rate limits:** the endpoints that spend AI quota (planning, negotiation, menu extraction, photo checks, invoicing, onboarding, MCP) are limited per client and return `429` with `Retry-After` ([`lib/rate-limit.ts`](lib/rate-limit.ts)).
+- **Sandbox-only shortcuts:** the test-card checkout and simulated invoice payment refuse to run when `PAYPAL_ENV=live`.
+- **No user accounts, by design:** so judges can play every role, the demo has no login, and any visitor can act as the buyer or a merchant. A production deployment would put the buyer and merchant actions behind authentication; the Mandate Firewall already scopes each action by actor.
+
 ## How we use PayPal
 
 All traffic is real **PayPal sandbox** traffic. Haggle is the platform (payee); merchants are paid by Payouts.

@@ -26,7 +26,8 @@
     "e2e:invoice": "tsx scripts/e2e-invoice.ts",
     "mcp:smoke": "tsx scripts/mcp-smoke.ts",
     "sandbox:fund": "tsx --env-file-if-exists=.env scripts/fund-sandbox.ts",
-    "tunnel": "node scripts/tunnel.mjs"
+    "tunnel": "node scripts/tunnel.mjs",
+    "logs:scrub": "tsx --env-file-if-exists=.env scripts/scrub-logs.mts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
