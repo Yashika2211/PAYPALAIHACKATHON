@@ -113,8 +113,9 @@ export function counterTotal(round: number, firstQuoteCents: number, lastOfferCe
 }
 
 export function counterMessage(round: number, counterCents: number, merchantName: string): string {
+  const name = merchantName.replace(/\.$/, "");
   const lines = [
-    `Thanks ${merchantName}. We're comparing several quotes. Could you do ${formatUsd(counterCents)} all-in?`,
+    `Thanks ${name}. We're comparing several quotes. Could you do ${formatUsd(counterCents)} all-in?`,
     `Closer! Another vendor is below you. ${formatUsd(counterCents)} and we can likely sign today.`,
     `Final ask: ${formatUsd(counterCents)} and you're in the bundle.`,
   ];

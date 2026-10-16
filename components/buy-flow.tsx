@@ -449,16 +449,35 @@ function Theater({ events, merchants, active }: { events: FeedEvent[]; merchants
                   <Delta cents={last - first} />
                 </div>
               )}
-              <ol className="flex flex-col gap-2 p-4 text-sm">
-                {mine.map((e) => (
-                  <TheaterRow key={e.seq} e={e} />
-                ))}
-              </ol>
+              <TheaterTranscript events={mine} done={!!done} />
             </Card>
           );
         })}
       </div>
     </section>
+  );
+}
+
+/** Live while negotiating; once done, older rounds fold away so the page stays short. */
+function TheaterTranscript({ events, done }: { events: FeedEvent[]; done: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = events.filter((e) => e.kind !== "negotiation_done");
+  const KEEP = 3;
+  const folded = done && !expanded && visible.length > KEEP + 1;
+  const shown = folded ? visible.slice(-KEEP) : visible;
+  return (
+    <ol className="flex flex-col gap-2 p-4 text-sm">
+      {folded && (
+        <li>
+          <button onClick={() => setExpanded(true)} className="figures w-full rounded-md border border-dashed border-line px-3 py-1.5 text-xs text-muted hover:text-ink">
+            Show all {visible.length} messages
+          </button>
+        </li>
+      )}
+      {shown.map((e) => (
+        <TheaterRow key={e.seq} e={e} />
+      ))}
+    </ol>
   );
 }
 
