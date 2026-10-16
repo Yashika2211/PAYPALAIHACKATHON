@@ -97,6 +97,19 @@ describe("ledger reducer", () => {
     expect(r.get("auth:o7")?.detail).toContain("•••• ?");
   });
 
+  it("tracks invoices from sent to paid or cancelled", () => {
+    const r = buildLedger([
+      ev("paypal", { step: "invoice_sent", invoiceId: "INV2-1", invoiceNumber: "HG-1", amountCents: 9000, agent: "gemini-3.5-flash-lite" }, "i1"),
+      ev("paypal", { step: "invoice_sent", invoiceId: "INV2-2", amountCents: 100, agent: "deterministic" }, "i2"),
+      ev("paypal", { step: "invoice_paid" }, "i1"),
+      ev("paypal", { step: "invoice_cancelled" }, "i2"),
+      ev("paypal", { step: "invoice_paid" }, "missing"),
+    ]);
+    expect(r.get("invoice:i1")).toMatchObject({ status: "paid", party: "Billing agent (gemini-3.5-flash-lite)", detail: "HG-1 · Net 15 · via PayPal Agent Toolkit" });
+    expect(r.get("invoice:i2")).toMatchObject({ status: "cancelled", party: "Billing agent", detail: "INV2-2 · Net 15 · via PayPal Agent Toolkit" });
+    expect(r.has("invoice:missing")).toBe(false);
+  });
+
   it("totals the ledger", () => {
     expect(totals(rows.values())).toEqual({
       heldCents: 71200,

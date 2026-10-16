@@ -8,7 +8,7 @@ import { Button, Card, Label, Money, Pill, STATE_TONE, cx, inputClass } from "@/
 import { reduceEvent, totals, type LedgerEvent, type LedgerRow, type LedgerType } from "@/lib/ledger";
 import { formatUsd } from "@/lib/money";
 
-const TYPES: LedgerType[] = ["Quote", "Firewall", "Bundle", "Authorization", "Capture", "Payout", "Fee", "Void", "Refund", "Delivery", "Vault"];
+const TYPES: LedgerType[] = ["Quote", "Firewall", "Bundle", "Authorization", "Capture", "Payout", "Fee", "Void", "Refund", "Delivery", "Vault", "Invoice"];
 const STATUS_TONE: Record<string, "good" | "bad" | "warn" | "neutral" | "accent"> = {
   ...STATE_TONE,
   allow: "good",
@@ -26,6 +26,9 @@ const STATUS_TONE: Record<string, "good" | "bad" | "warn" | "neutral" | "accent"
   quoted: "accent",
   "agent paid": "good",
   saved: "accent",
+  sent: "warn",
+  paid: "good",
+  cancelled: "neutral",
 };
 const COLUMN_STATE_KEY = "haggle-ledger-columns-v1";
 

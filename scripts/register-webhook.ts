@@ -1,4 +1,4 @@
-import { createWebhook, listWebhooks, updateWebhookUrl } from "../lib/paypal/webhooks";
+import { createWebhook, listWebhooks, updateWebhook } from "../lib/paypal/webhooks";
 import { sql } from "../lib/db/client";
 
 // Usage: pnpm webhook:register https://<public-host>
@@ -9,7 +9,7 @@ async function main() {
   const url = `${base}/api/webhooks/paypal`;
   const { webhooks } = await listWebhooks();
   const existing = webhooks.find((w) => w.url.endsWith("/api/webhooks/paypal"));
-  const hook = existing ? await updateWebhookUrl(existing.id, url) : await createWebhook(url);
+  const hook = existing ? await updateWebhook(existing.id, url) : await createWebhook(url);
   console.log(`${existing ? "updated" : "created"} webhook -> ${hook.url}`);
   console.log(`PAYPAL_WEBHOOK_ID=${hook.id}`);
   await sql.end();

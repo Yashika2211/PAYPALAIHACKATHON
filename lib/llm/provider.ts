@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText, Output, type LanguageModel, type ModelMessage } from "ai";
+import { generateText, isStepCount, Output, type LanguageModel, type ModelMessage, type ToolSet } from "ai";
 import { eq } from "drizzle-orm";
 import type { z } from "zod";
 import { db, schema } from "@/lib/db/client";
@@ -149,4 +149,44 @@ export async function structured<S extends z.ZodType>(args: {
     if (cached) return { value: args.schema.parse(cached.value), source: "cache", model: cached.model, error: lastError };
   }
   return { value: args.fallback(), source: "fallback", error: lastError };
+}
+
+/**
+ * Tool-calling loop over the model chain. Tools enforce their own rules in code;
+ * `done` tells us whether the agent actually finished the job, so a model that
+ * stops early is treated like a failure and the next model (or the caller's
+ * deterministic path) takes over.
+ */
+export async function runToolAgent(args: {
+  tier: Tier;
+  system: string;
+  prompt: string;
+  tools: ToolSet;
+  maxSteps: number;
+  done: () => boolean;
+  timeoutMs?: number;
+}): Promise<{ model: string | null; error?: string }> {
+  let lastError = "no model configured";
+  for (const { label, model } of candidates(args.tier)) {
+    if ((cooldown.get(label) ?? 0) > Date.now()) continue;
+    try {
+      await generateText({
+        model,
+        system: args.system,
+        prompt: args.prompt,
+        tools: args.tools,
+        stopWhen: isStepCount(args.maxSteps),
+        abortSignal: AbortSignal.timeout(args.timeoutMs ?? 45_000),
+        maxRetries: 1,
+      });
+      if (args.done()) return { model: label };
+      lastError = `${label} stopped before finishing`;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      if (/quota|RESOURCE_EXHAUSTED|rate limit/i.test(lastError)) cooldown.set(label, Date.now() + QUOTA_COOLDOWN_MS);
+      console.warn(`[llm] ${label} (tools) failed: ${lastError.slice(0, 160)}`);
+    }
+    if (args.done()) return { model: label };
+  }
+  return { model: null, error: lastError };
 }

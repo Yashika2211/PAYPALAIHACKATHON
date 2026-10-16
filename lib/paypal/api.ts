@@ -285,3 +285,18 @@ export function cancelInvoice(invoiceId: string, orderId: string) {
     body: { subject: "Haggle order cancelled", note: "This invoice was cancelled.", send_to_recipient: true, send_to_invoicer: true },
   });
 }
+
+/** Sets net payment terms on a draft invoice (GET + full PUT, as the API requires). */
+export async function setInvoiceTerms(invoiceId: string, term: "NET_10" | "NET_15" | "NET_30", orderId: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- full invoice document round-trip
+  const invoice = await paypalRequest<any>({ method: "GET", path: `/v2/invoicing/invoices/${invoiceId}`, orderId });
+  const detail = { ...invoice.detail, payment_term: { term_type: term } };
+  delete detail.metadata;
+  return paypalRequest<Invoice>({
+    method: "PUT",
+    path: `/v2/invoicing/invoices/${invoiceId}?send_to_recipient=false`,
+    requestId: `invoice-terms-${invoiceId}`,
+    orderId,
+    body: { ...invoice, detail, links: undefined },
+  });
+}

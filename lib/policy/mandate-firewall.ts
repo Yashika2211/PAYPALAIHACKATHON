@@ -29,6 +29,14 @@ export type Action =
       amountCents: number;
       lines: ReadonlyArray<{ merchantId: string; category: string; amountCents: number }>;
     }
+  | {
+      /** Bill the buyer by PayPal invoice instead of holding funds. */
+      type: "request_invoice";
+      amountCents: number;
+      lines: ReadonlyArray<{ merchantId: string; category: string; amountCents: number }>;
+      /** Set by server code from the buyer's recorded click, never from model output. */
+      humanApproved: boolean;
+    }
   | { type: "capture_payment"; merchantId: string; amountCents: number; deliveryVerified: boolean }
   | { type: "void_authorization" }
   | { type: "refund"; amountCents: number };
@@ -51,8 +59,8 @@ export interface FirewallResult {
 
 const ACTOR_PERMISSIONS: Record<Actor, ReadonlyArray<Action["type"]>> = {
   merchant_agent: ["propose_offer"],
-  buyer_agent: ["send_rfq", "counter_offer", "accept_offer", "authorize_payment"],
-  human: ["authorize_payment", "capture_payment", "void_authorization", "refund", "accept_offer"],
+  buyer_agent: ["send_rfq", "counter_offer", "accept_offer", "authorize_payment", "request_invoice"],
+  human: ["authorize_payment", "request_invoice", "capture_payment", "void_authorization", "refund", "accept_offer"],
   system: ["capture_payment", "void_authorization", "refund"],
 };
 
@@ -112,7 +120,8 @@ export function evaluate(mandate: MandateView | null, action: Action, ctx: Firew
         }
         break;
       }
-      case "authorize_payment": {
+      case "authorize_payment":
+      case "request_invoice": {
         const sum = action.lines.reduce((s, l) => s + l.amountCents, 0);
         if (sum !== action.amountCents) deny.push("line items do not add up to the authorization amount");
         if (action.amountCents <= 0) deny.push("authorization amount must be positive");
@@ -130,7 +139,8 @@ export function evaluate(mandate: MandateView | null, action: Action, ctx: Firew
             deny.push(`category "${line.category}" is not allowed by the mandate`);
           }
         }
-        if (ctx.actor !== "human" && action.amountCents > mandate.approvalThresholdCents) {
+        const approved = ctx.actor === "human" || (action.type === "request_invoice" && action.humanApproved);
+        if (!approved && action.amountCents > mandate.approvalThresholdCents) {
           human.push(
             `${usd(action.amountCents)} is above the auto-approve threshold of ${usd(mandate.approvalThresholdCents)}`,
           );

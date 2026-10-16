@@ -149,6 +149,16 @@ describe("Mandate Firewall", () => {
     expect(r.reasons).toEqual(["line items do not add up to the authorization amount"]);
   });
 
+  it("lets the buyer agent issue an invoice the buyer approved, even above the threshold", () => {
+    const lines = [{ merchantId: "caterer", category: "catering", amountCents: 50_000 }];
+    const invoice = (humanApproved: boolean): Action => ({ type: "request_invoice", amountCents: 50_000, lines, humanApproved });
+    expect(evaluate(mandate(), invoice(true), ctx()).decision).toBe("allow");
+    expect(evaluate(mandate(), invoice(false), ctx()).decision).toBe("needs_human");
+    const over: Action = { type: "request_invoice", amountCents: 900_000, lines: [{ merchantId: "caterer", category: "catering", amountCents: 900_000 }], humanApproved: true };
+    expect(evaluate(mandate(), over, ctx()).reasons).toContain("authorization $9000.00 exceeds remaining budget $800.00");
+    expect(evaluate(mandate(), invoice(false), ctx({ actor: "merchant_agent" })).decision).toBe("deny");
+  });
+
   it("requires verified delivery before the system captures", () => {
     const action: Action = { type: "capture_payment", merchantId: "caterer", amountCents: 1000, deliveryVerified: false };
     expect(evaluate(mandate(), action, ctx({ actor: "system" })).decision).toBe("needs_human");

@@ -136,6 +136,7 @@ export const orderState = pgEnum("order_state", [
   "draft",
   "quoted",
   "mandate_signed",
+  "invoiced",
   "authorized",
   "partially_captured",
   "settled",
@@ -188,6 +189,8 @@ export const merchantAllocations = pgTable("merchant_allocations", {
   paypalCaptureId: text("paypal_capture_id").unique(),
   captureRequestId: text("capture_request_id"),
   deliveryPhotoUrl: text("delivery_photo_url"),
+  // Invoice-paid orders: funds are in at payment, payout waits for this.
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   verifierResult: jsonb("verifier_result"),
   ...timestamps,
 });

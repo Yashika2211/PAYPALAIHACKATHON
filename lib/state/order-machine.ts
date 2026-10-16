@@ -2,6 +2,7 @@ export type OrderState =
   | "draft"
   | "quoted"
   | "mandate_signed"
+  | "invoiced"
   | "authorized"
   | "partially_captured"
   | "settled"
@@ -13,7 +14,9 @@ export type AllocationState = "pending" | "authorized" | "captured" | "voided" |
 const TRANSITIONS: Record<OrderState, readonly OrderState[]> = {
   draft: ["quoted"],
   quoted: ["mandate_signed", "voided"],
-  mandate_signed: ["authorized", "voided"],
+  mandate_signed: ["authorized", "invoiced", "voided"],
+  // Net-terms path: the buyer pays a PayPal invoice instead of a hold.
+  invoiced: ["settled", "voided"],
   authorized: ["partially_captured", "settled", "voided"],
   partially_captured: ["partially_captured", "settled", "refunded"],
   settled: ["refunded"],

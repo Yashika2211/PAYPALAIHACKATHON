@@ -284,6 +284,8 @@ export async function payoutAllocation(allocationId: string) {
   const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, alloc.orderId) });
   const merchant = await db.query.merchants.findFirst({ where: eq(schema.merchants.id, alloc.merchantId) });
   if (!order || !merchant) return;
+  // Invoice orders collect funds up front; merchants are paid only after delivery.
+  if (order.paymentMethod === "invoice" && !alloc.deliveredAt) return;
   const feeCents = Math.round((alloc.amountCents * order.platformFeeBps) / 10_000);
   const netCents = alloc.amountCents - feeCents;
 
@@ -341,6 +343,7 @@ export async function retryPayout(allocationId: string) {
 /** Voids whatever is still held: undelivered goods are never charged. */
 export async function voidRemaining(orderId: string) {
   const { order, allocations } = await loadOrder(orderId);
+  if (order.paymentMethod === "invoice") return cancelUnpaidInvoice(order, allocations);
   const open = allocations.filter((a) => a.state === "authorized");
   if (!order.paypalAuthorizationId || open.length === 0) return;
   const decision = await guard({
@@ -414,6 +417,85 @@ export async function applyRefund(allocationId: string, refundId: string) {
   await recomputeOrderState(a.orderId);
 }
 
+// ── Invoice (net terms) settlement ─────────────────────────
+
+/** Invoice paid: funds are in. Delivered lines are paid out now, the rest on delivery. */
+export async function applyInvoicePaid(invoiceId: string) {
+  const order = await db.query.orders.findFirst({ where: eq(schema.orders.paypalInvoiceId, invoiceId) });
+  if (!order) return;
+  const paid = await db
+    .update(schema.merchantAllocations)
+    .set({ state: "captured" })
+    .where(and(eq(schema.merchantAllocations.orderId, order.id), eq(schema.merchantAllocations.state, "pending")))
+    .returning();
+  if (paid.length === 0) return;
+  await emit("paypal", { step: "invoice_paid", invoiceId, amountCents: order.totalCents }, { rfqId: order.rfqId, orderId: order.id });
+  await recomputeOrderState(order.id);
+  for (const a of paid) if (a.deliveredAt) await payoutAllocation(a.id);
+}
+
+/** Sandbox stand-in for the buyer paying: records a bank-transfer payment, then applies PayPal's status. */
+export async function recordInvoicePaid(orderId: string) {
+  if (process.env.PAYPAL_ENV === "live") throw new Error("Simulated invoice payments are sandbox-only");
+  const { order } = await loadOrder(orderId);
+  if (!order.paypalInvoiceId) throw new Error("This order has no invoice");
+  await pp.recordInvoicePayment(order.paypalInvoiceId, order.totalCents, orderId);
+  const invoice = await pp.getInvoice(order.paypalInvoiceId, orderId);
+  if (invoice.status === "PAID" || invoice.status === "MARKED_AS_PAID") await applyInvoicePaid(order.paypalInvoiceId);
+  return invoice.status;
+}
+
+/** Records delivery on an invoice order; pays the merchant out if the invoice is already paid. */
+export async function markDelivered(allocationId: string, opts: { actor: "human" | "system"; deliveryVerified: boolean }) {
+  const alloc = await db.query.merchantAllocations.findFirst({ where: eq(schema.merchantAllocations.id, allocationId) });
+  if (!alloc) throw new Error("Allocation not found");
+  if (alloc.deliveredAt) return alloc;
+  const { order } = await loadOrder(alloc.orderId);
+  if (!opts.deliveryVerified && opts.actor !== "human") throw new Error("Delivery has not been verified");
+  await db.update(schema.merchantAllocations).set({ deliveredAt: new Date() }).where(eq(schema.merchantAllocations.id, allocationId));
+  const merchant = await db.query.merchants.findFirst({ where: eq(schema.merchants.id, alloc.merchantId) });
+  await emit("paypal", { step: "delivered", allocationId, merchant: merchant?.name, amountCents: alloc.amountCents }, { rfqId: order.rfqId, orderId: order.id });
+  if (alloc.state === "captured") await payoutAllocation(allocationId);
+  return alloc;
+}
+
+/** Delivery entry point for any order: capture for holds, record + payout for invoices. */
+export async function deliver(allocationId: string, opts: { actor: "human" | "system"; deliveryVerified: boolean }) {
+  const alloc = await db.query.merchantAllocations.findFirst({ where: eq(schema.merchantAllocations.id, allocationId) });
+  if (!alloc) throw new Error("Allocation not found");
+  const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, alloc.orderId) });
+  return order?.paymentMethod === "invoice" ? markDelivered(allocationId, opts) : captureAllocation(allocationId, opts);
+}
+
+async function cancelUnpaidInvoice(order: typeof schema.orders.$inferSelect, allocations: Array<typeof schema.merchantAllocations.$inferSelect>) {
+  const unpaid = allocations.filter((a) => a.state === "pending");
+  if (!order.paypalInvoiceId || unpaid.length !== allocations.length) throw new Error("Only an unpaid invoice can be cancelled");
+  const decision = await guard({ mandateId: order.mandateId, rfqId: order.rfqId, orderId: order.id, actor: "human", actorLabel: "buyer (cancel invoice)", action: { type: "void_authorization" } });
+  if (decision.decision !== "allow") throw new Error(`Mandate Firewall: ${decision.reasons.join("; ")}`);
+  await pp.cancelInvoice(order.paypalInvoiceId, order.id);
+  await applyInvoiceCancelled(order.paypalInvoiceId);
+}
+
+export async function applyInvoiceCancelled(invoiceId: string) {
+  const order = await db.query.orders.findFirst({ where: eq(schema.orders.paypalInvoiceId, invoiceId) });
+  if (!order) return;
+  const voided = await db
+    .update(schema.merchantAllocations)
+    .set({ state: "voided" })
+    .where(and(eq(schema.merchantAllocations.orderId, order.id), eq(schema.merchantAllocations.state, "pending")))
+    .returning();
+  if (voided.length === 0) return;
+  const released = voided.reduce((s, a) => s + a.amountCents, 0);
+  if (order.mandateId) {
+    await db
+      .update(schema.mandates)
+      .set({ spentCents: dsql`greatest(0, ${schema.mandates.spentCents} - ${released})` })
+      .where(eq(schema.mandates.id, order.mandateId));
+  }
+  await emit("paypal", { step: "invoice_cancelled", invoiceId, releasedCents: released }, { rfqId: order.rfqId, orderId: order.id });
+  await recomputeOrderState(order.id);
+}
+
 /** Idempotent webhook processing. Returns a short description of what was applied. */
 export async function processWebhookEvent(event: WebhookEvent): Promise<string> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PayPal resource shapes vary by event type
@@ -454,6 +536,18 @@ export async function processWebhookEvent(event: WebhookEvent): Promise<string> 
       if (!alloc) return "no matching allocation";
       await applyRefund(alloc.id, String(r.id));
       return "refund applied";
+    }
+    case "INVOICING.INVOICE.PAID": {
+      const id = String(r.invoice?.id ?? r.id ?? "");
+      if (!id) return "no invoice id";
+      await applyInvoicePaid(id);
+      return "invoice payment applied";
+    }
+    case "INVOICING.INVOICE.CANCELLED": {
+      const id = String(r.invoice?.id ?? r.id ?? "");
+      if (!id) return "no invoice id";
+      await applyInvoiceCancelled(id);
+      return "invoice cancellation applied";
     }
     case "PAYMENT.PAYOUTS-ITEM.SUCCEEDED":
     case "PAYMENT.PAYOUTS-ITEM.FAILED":

@@ -9,6 +9,8 @@ export const SUBSCRIBED_EVENTS = [
   "PAYMENT.PAYOUTS-ITEM.SUCCEEDED",
   "PAYMENT.PAYOUTS-ITEM.FAILED",
   "PAYMENT.PAYOUTS-ITEM.UNCLAIMED",
+  "INVOICING.INVOICE.PAID",
+  "INVOICING.INVOICE.CANCELLED",
 ] as const;
 
 export interface WebhookEvent {
@@ -55,10 +57,14 @@ export function createWebhook(url: string) {
   });
 }
 
-export function updateWebhookUrl(webhookId: string, url: string) {
+/** Repoints an existing webhook and brings its subscriptions up to date. */
+export function updateWebhook(webhookId: string, url: string) {
   return paypalRequest<{ id: string; url: string }>({
     method: "PATCH",
     path: `/v1/notifications/webhooks/${webhookId}`,
-    body: [{ op: "replace", path: "/url", value: url }],
+    body: [
+      { op: "replace", path: "/url", value: url },
+      { op: "replace", path: "/event_types", value: SUBSCRIBED_EVENTS.map((name) => ({ name })) },
+    ],
   });
 }

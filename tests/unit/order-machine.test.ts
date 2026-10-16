@@ -17,6 +17,12 @@ describe("order state machine", () => {
     expect(transition(s, "refunded")).toBe("refunded");
   });
 
+  it("supports the invoice path", () => {
+    expect(transition(transition("mandate_signed", "invoiced"), "settled")).toBe("settled");
+    expect(canTransition("invoiced", "voided")).toBe(true);
+    expect(canTransition("invoiced", "authorized")).toBe(false);
+  });
+
   it("treats repeats as no-ops (idempotent webhooks)", () => {
     expect(transition("authorized", "authorized")).toBe("authorized");
   });

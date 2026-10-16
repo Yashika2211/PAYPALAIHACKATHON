@@ -4,7 +4,7 @@
  * Rows are keyed by the entity they describe, so later events update them in place.
  */
 
-export type LedgerType = "Quote" | "Firewall" | "Bundle" | "Authorization" | "Capture" | "Payout" | "Fee" | "Void" | "Refund" | "Delivery" | "Vault";
+export type LedgerType = "Quote" | "Firewall" | "Bundle" | "Authorization" | "Capture" | "Payout" | "Fee" | "Void" | "Refund" | "Delivery" | "Vault" | "Invoice";
 
 export interface LedgerRow {
   id: string;
@@ -114,6 +114,23 @@ export function reduceEvent(rows: ReadonlyMap<string, LedgerRow>, e: LedgerEvent
               detail: `Authorization ${p.authorizationId}${prev ? " · agent-initiated" : ""}`,
             }),
           ];
+        }
+        case "invoice_sent":
+          return [
+            upsert(`invoice:${e.orderId}`, {
+              ...base,
+              type: "Invoice",
+              party: p.agent && p.agent !== "deterministic" ? `Billing agent (${p.agent})` : "Billing agent",
+              amountCents: p.amountCents,
+              status: "sent",
+              detail: `${p.invoiceNumber ?? p.invoiceId} · Net 15 · via PayPal Agent Toolkit`,
+            }),
+          ];
+        case "invoice_paid":
+        case "invoice_cancelled": {
+          const prev = rows.get(`invoice:${e.orderId}`);
+          if (!prev) return [];
+          return [{ ...prev, ts: e.createdAt, status: p.step === "invoice_paid" ? "paid" : "cancelled" }];
         }
         case "vaulted":
           return [

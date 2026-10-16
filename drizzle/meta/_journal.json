@@ -29,6 +29,13 @@
       "when": 1792109659850,
       "tag": "0003_vault_and_payment_method",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792109961281,
+      "tag": "0004_invoicing",
+      "breakpoints": true
     }
   ]
 }

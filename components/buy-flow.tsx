@@ -26,6 +26,7 @@ interface Snapshot {
     paypalAuthorizationId: string | null;
     paymentMethod: string | null;
     autoApproved: boolean;
+    paypalInvoiceId: string | null;
   };
   allocations: Array<{
     id: string;
@@ -35,6 +36,7 @@ interface Snapshot {
     state: string;
     paypalCaptureId: string | null;
     deliveryPhotoUrl: string | null;
+    deliveredAt: string | null;
     verifierResult: null | { pass: boolean; confidence: number; reason: string; source: string };
   }>;
   payouts: Array<{ allocationId: string; netCents: number; feeCents: number; status: string; payoutBatchId: string | null }>;
@@ -126,8 +128,8 @@ function useEvents(rfqId: string, onImportant: () => void) {
 const STEPS = ["Request", "Mandate", "Negotiate", "Approve", "Settle"] as const;
 
 function currentStep(s: Snapshot): number {
-  if (!s.mandate || s.mandate.status !== "active") return 1;
-  if (!s.order) return 2;
+  if (!s.mandate) return 1;
+  if (!s.order) return s.mandate.status === "active" ? 2 : 1;
   if (s.order.state === "mandate_signed") return 3;
   return 4;
 }
@@ -555,10 +557,12 @@ function BundlePanel({
           <p className="text-ink">Your agent didn&apos;t pay on its own: {approvalReason}.</p>
         </div>
       )}
+      {order.paymentMethod === "invoice" && <InvoicePanel snap={snap} events={events} busy={busy} run={run} />}
       <ul className="divide-y divide-line">
         {snap.allocations.map((a) => (
           <AllocationRow
             key={a.id}
+            invoiceOrder={order.paymentMethod === "invoice"}
             a={a}
             merchant={name(a.merchantId)}
             payout={snap.payouts.find((p) => p.allocationId === a.id)}
@@ -569,6 +573,14 @@ function BundlePanel({
       </ul>
 
       {order.state === "mandate_signed" && <PayPalCheckout orderId={order.id} onAuthorized={onAuthorized} onError={onError} />}
+      {order.state === "invoiced" && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-sunken/50 px-5 py-4">
+          <p className="text-sm text-muted">Nothing has been paid yet. Cancelling the invoice releases your budget.</p>
+          <Button variant="secondary" onClick={run("void", () => api(`/api/orders/${order.id}/void`, {}))} disabled={!!busy}>
+            {busy === "void" ? "Cancelling…" : "Cancel invoice"}
+          </Button>
+        </div>
+      )}
       {(order.state === "authorized" || order.state === "partially_captured") && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-sunken/50 px-5 py-4">
           <p className="text-sm text-muted">Funds are held on PayPal. Each merchant is paid when they deliver.</p>
@@ -586,7 +598,21 @@ type Allocation = Snapshot["allocations"][number];
 type Runner = (label: string, fn: () => Promise<unknown>) => () => Promise<void>;
 
 /** One merchant's share: delivery photo → AI check → capture → payout, with human overrides. */
-function AllocationRow({ a, merchant, payout, busy, run }: { a: Allocation; merchant: string; payout?: Snapshot["payouts"][number]; busy: string; run: Runner }) {
+function AllocationRow({
+  a,
+  merchant,
+  payout,
+  busy,
+  run,
+  invoiceOrder,
+}: {
+  a: Allocation;
+  merchant: string;
+  payout?: Snapshot["payouts"][number];
+  busy: string;
+  run: Runner;
+  invoiceOrder: boolean;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const v = a.verifierResult;
   // Demo photos that match each seeded merchant's order; real merchants upload their own.
@@ -621,7 +647,14 @@ function AllocationRow({ a, merchant, payout, busy, run }: { a: Allocation; merc
           )}
         </div>
         <Money cents={a.amountCents} className="text-lg" />
-        <StatePill state={a.state} />
+        {invoiceOrder ? (
+          <>
+            <Pill tone={a.state === "captured" ? "good" : a.state === "voided" ? "neutral" : "warn"}>{a.state === "captured" ? "paid" : a.state === "pending" ? "awaiting payment" : a.state}</Pill>
+            {a.deliveredAt && <Pill tone="good">delivered</Pill>}
+          </>
+        ) : (
+          <StatePill state={a.state} />
+        )}
       </div>
 
       {(v || a.deliveryPhotoUrl) && (
@@ -645,7 +678,7 @@ function AllocationRow({ a, merchant, payout, busy, run }: { a: Allocation; merc
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {a.state === "authorized" && (
+        {(a.state === "authorized" || (invoiceOrder && !a.deliveredAt && (a.state === "pending" || a.state === "captured"))) && (
           <>
             <input
               ref={fileRef}
@@ -806,7 +839,7 @@ function PayPalCheckout({ orderId, onAuthorized, onError }: { orderId: string; o
         <p className="mt-1 text-sm text-muted">
           Funds are <b className="text-ink">held, not charged</b>, until delivery. Anything undelivered is released back to you.
         </p>
-        {state === "processing" && <p className="mt-2 text-sm text-accent">Authorizing with PayPal…</p>}
+        {state === "processing" && <p className="mt-2 text-sm text-accent">Working with PayPal…</p>}
       </div>
       <div>
         {state === "loading" && <div className="h-11 animate-pulse rounded-md bg-line" />}
@@ -827,6 +860,23 @@ function PayPalCheckout({ orderId, onAuthorized, onError }: { orderId: string; o
           className="mt-2 w-full rounded-md border border-dashed border-line-strong px-3 py-2 text-xs text-muted transition hover:border-ink hover:text-ink disabled:opacity-50"
         >
           No sandbox login? Use PayPal&apos;s sandbox test card
+        </button>
+        <button
+          type="button"
+          disabled={state === "processing"}
+          onClick={async () => {
+            setState("processing");
+            try {
+              await api(`/api/orders/${orderId}/invoice`, {});
+              onAuthorized();
+            } catch (e) {
+              onError((e as Error).message);
+              setState("ready");
+            }
+          }}
+          className="mt-2 w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-xs font-medium text-ink transition hover:bg-sunken disabled:opacity-50"
+        >
+          Business buyer? Pay by PayPal invoice (Net 15)
         </button>
         <label className="mt-2 flex items-start gap-2 text-xs text-muted">
           <input type="checkbox" checked={saveForAgent} onChange={(e) => setSaveForAgent(e.target.checked)} className="mt-0.5 accent-[var(--accent)]" />
@@ -874,6 +924,10 @@ function FirewallFeed({ events }: { events: FeedEvent[] }) {
 const PAYPAL_STEP: Record<string, string> = {
   order_created: "PayPal order created",
   vaulted: "Card saved in PayPal Vault",
+  invoice_sent: "Invoice sent (Net 15)",
+  invoice_paid: "Invoice paid",
+  invoice_cancelled: "Invoice cancelled",
+  delivered: "Delivery recorded",
   auto_approved: "Agent paid with saved method",
   approved_webhook: "Buyer approved",
   authorized: "Funds authorized (held)",
@@ -928,5 +982,46 @@ function PayPalTimeline({ events }: { events: FeedEvent[] }) {
         </ol>
       )}
     </Card>
+  );
+}
+
+/** Net-terms orders: the PayPal invoice the billing agent issued, and its status. */
+function InvoicePanel({ snap, events, busy, run }: { snap: Snapshot; events: FeedEvent[]; busy: string; run: Runner }) {
+  const order = snap.order!;
+  const sent = [...events].reverse().find((e) => e.kind === "paypal" && e.payload.step === "invoice_sent" && e.orderId === order.id);
+  const paid = snap.allocations.every((a) => a.state === "captured" || a.state === "refunded");
+  const cancelled = snap.allocations.every((a) => a.state === "voided");
+  return (
+    <div className={cx("flex flex-wrap items-start gap-3 border-b border-line px-5 py-3 text-sm", paid ? "bg-good-soft/60" : cancelled ? "bg-sunken/60" : "bg-warn-soft/50")}>
+      <Pill tone={paid ? "good" : cancelled ? "neutral" : "warn"}>{paid ? "invoice paid" : cancelled ? "invoice cancelled" : "invoice sent"}</Pill>
+      <div className="min-w-0 flex-1">
+        <p className="text-ink">
+          {sent?.payload.agent && sent.payload.agent !== "deterministic"
+            ? `Haggle's billing agent (${sent.payload.agent}) issued `
+            : "Haggle issued "}
+          PayPal invoice <span className="figures">{sent?.payload.invoiceNumber ?? order.paypalInvoiceId}</span> through the PayPal Agent Toolkit, on Net 15
+          terms. Every toolkit call was checked against this bundle and the Mandate Firewall.
+        </p>
+        <p className="mt-1 text-muted">
+          {paid
+            ? "Funds are in. Each merchant is paid out as soon as their delivery is verified."
+            : cancelled
+              ? "Nothing was charged."
+              : "Merchants can deliver now; they are paid out once the invoice is paid and their delivery is verified."}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {sent?.payload.url && (
+            <a href={sent.payload.url} target="_blank" rel="noreferrer" className="text-xs text-ink underline underline-offset-4">
+              View invoice as the buyer
+            </a>
+          )}
+          {!paid && !cancelled && (
+            <Button variant="secondary" className="px-3 py-1.5 text-xs" disabled={!!busy} onClick={run("invoice-pay", () => api(`/api/orders/${order.id}/invoice/pay`, {}))}>
+              {busy === "invoice-pay" ? "Recording payment…" : "Sandbox: buyer pays the invoice"}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
