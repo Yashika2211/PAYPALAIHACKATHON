@@ -1,3 +1,4 @@
+import { McpSnippet } from "@/components/mcp-snippet";
 import { ButtonLink, Label, Money, Pill } from "@/components/ui";
 
 const STEPS = [
@@ -16,6 +17,15 @@ const STEPS = [
     title: "PayPal holds the money until delivery",
     body: "Approving authorizes the funds without charging them. Each merchant is captured and paid out only when their part is delivered. Undelivered means never charged.",
   },
+];
+
+const PAYPAL = [
+  { api: "Orders v2 · AUTHORIZE", title: "Held, not charged", body: "Approving a bundle authorizes the funds. Nothing is captured until a merchant delivers." },
+  { api: "Payments v2 · partial capture", title: "Each merchant paid on delivery", body: "One capture per merchant after an AI-verified delivery photo. Undelivered shares are voided." },
+  { api: "Payouts v1", title: "Merchants paid out instantly", body: "Captured shares go straight to each merchant's PayPal, minus Haggle's 3% fee, with retries." },
+  { api: "Vault v3", title: "Your agent pays under your limit", body: "Save a payment method once. Your agent pays on its own within your auto-approve limit, and asks above it." },
+  { api: "Invoicing v2 · Agent Toolkit", title: "Net terms for businesses", body: "A billing agent issues a PayPal invoice through the Agent Toolkit, every call checked against your approval." },
+  { api: "Webhooks", title: "PayPal is the source of truth", body: "Every state change is confirmed by a signature-verified webhook, processed exactly once." },
 ];
 
 function Ticket() {
@@ -99,6 +109,34 @@ export default function Home() {
               <p className="mt-2 text-muted">{s.body}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-6xl px-4 pt-16">
+        <Label>Built on PayPal, end to end</Label>
+        <div className="mt-4 grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+          {PAYPAL.map((f) => (
+            <div key={f.title} className="bg-surface p-5">
+              <p className="figures text-[11px] uppercase tracking-wider text-accent">{f.api}</p>
+              <h3 className="mt-2 font-semibold">{f.title}</h3>
+              <p className="mt-1 text-sm text-muted">{f.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto grid w-full max-w-6xl gap-8 px-4 pt-16 md:grid-cols-[1fr_1.1fr] md:items-center">
+        <div>
+          <Label>For AI agents</Label>
+          <h2 className="mt-3 font-serif text-3xl leading-tight sm:text-4xl">Bring your own agent.</h2>
+          <p className="mt-3 text-muted">
+            Haggle is an MCP server. Claude, ChatGPT or any MCP client can discover local merchants, request quotes, negotiate and pay, under
+            the same mandate rules. Agents can&apos;t sign a mandate; a person always does.
+          </p>
+        </div>
+        <div className="flex min-w-0 flex-col gap-3">
+          <McpSnippet />
+          <p className="figures text-xs break-words text-muted">tools: list_merchants · request_quotes · start_negotiation · get_request_status · pay_for_bundle</p>
         </div>
       </section>
 
