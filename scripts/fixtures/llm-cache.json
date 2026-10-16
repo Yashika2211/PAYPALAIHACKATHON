@@ -1,1 +1,87 @@
-[]
+[
+  {
+    "key": "k:verify:sample:badges:Inkwell Print Co.: 40× Printed name badges with lanyards",
+    "value": {
+      "pass": true,
+      "reason": "The image clearly shows 40 printed name badges with blue lanyards as ordered.",
+      "confidence": 0.98
+    },
+    "model": "gemini-3.5-flash"
+  },
+  {
+    "key": "k:verify:sample:tandoor:Tandoor & Tiffin: 20× Chana masala & jeera rice, 20× Butter chicken thali",
+    "value": {
+      "pass": true,
+      "reason": "The image clearly shows 20 Chana Masala containers and 20 Butter Chicken containers matching the order quantity and items.",
+      "confidence": 0.95
+    },
+    "model": "gemini-3.5-flash"
+  },
+  {
+    "key": "k:extract:sample:menu",
+    "value": {
+      "items": [
+        {
+          "name": "Paneer tikka thali",
+          "unit": "per person",
+          "confidence": 0.98,
+          "priceCents": 1450,
+          "dietaryTags": [
+            "vegetarian"
+          ]
+        },
+        {
+          "name": "Chana masala & jeera rice",
+          "unit": "per person",
+          "confidence": 0.98,
+          "priceCents": 1200,
+          "dietaryTags": [
+            "vegan"
+          ]
+        },
+        {
+          "name": "Butter chicken thali",
+          "unit": "per person",
+          "confidence": 0.98,
+          "priceCents": 1550,
+          "dietaryTags": []
+        },
+        {
+          "name": "Lamb biryani box",
+          "unit": "per person",
+          "confidence": 0.98,
+          "priceCents": 1700,
+          "dietaryTags": []
+        },
+        {
+          "name": "Samosa platter (24 pc)",
+          "unit": "platter",
+          "confidence": 0.95,
+          "priceCents": 3600,
+          "dietaryTags": [
+            "vegetarian"
+          ]
+        },
+        {
+          "name": "Gulab jamun",
+          "unit": "per dozen",
+          "confidence": 0.95,
+          "priceCents": 1800,
+          "dietaryTags": [
+            "vegetarian"
+          ]
+        },
+        {
+          "name": "Masala chai service",
+          "unit": "per person",
+          "confidence": 0.98,
+          "priceCents": 350,
+          "dietaryTags": []
+        }
+      ],
+      "category": "catering",
+      "businessName": "Tandoor & Tiffin"
+    },
+    "model": "gemini-3.8-flash"
+  }
+]
