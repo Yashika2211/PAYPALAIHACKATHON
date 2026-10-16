@@ -114,7 +114,7 @@ flowchart LR
   PP -- signed webhooks --> WH
   S & SET & FW --> DB[(Postgres<br/>mandates · offers · orders<br/>events · paypal_events)]
   DB -- events feed --> L
-  CRON[Render cron:<br/>expire mandates,<br/>void stale holds] --> SET
+  CRON[Scheduled sweep:<br/>expire mandates,<br/>void stale holds] --> SET
 ```
 
 The `events` table is an append-only feed. The Negotiation Theater and the ledger tail it over Server-Sent Events, which works across processes and survives reconnects through `Last-Event-ID`.
@@ -172,15 +172,14 @@ pnpm e2e:sandbox              # API-level run incl. void path and webhook arriva
 
 ## Deploy on Render
 
-[`render.yaml`](render.yaml) is a Blueprint that sets up:
-- a **web service** (Next.js, health check at `/api/health`, migrations and seeding as a pre-deploy step);
-- a **cron job** every 30 min that expires mandates and voids holds older than the PayPal honor period;
-- **managed Postgres 16**.
+[`render.yaml`](render.yaml) is a Blueprint for a **web service** (Next.js, health check at `/api/health`, idempotent migrations and seeding at start) and **managed Postgres 16**. It defaults to Render's **free plans**, which need no card:
+- On the free plan there is no cron, so the web service itself sweeps expired mandates and stale PayPal holds every 30 minutes ([`instrumentation.ts`](instrumentation.ts) → [`lib/maintenance.ts`](lib/maintenance.ts)).
+- Upgrading is a two-line change: `plan: starter` for always-on, plus the commented-out **cron job** for a separate scheduled sweep.
 
 To deploy:
 1. In Render, choose **New → Blueprint** and pick this repo.
 2. Fill in the secrets when prompted.
-3. Run `pnpm webhook:register https://<your-render-url>` and set `PAYPAL_WEBHOOK_ID`.
+3. Run `pnpm webhook:register https://<your-render-url>` and set `PAYPAL_WEBHOOK_ID` in the env group.
 
 ## Known limitations
 

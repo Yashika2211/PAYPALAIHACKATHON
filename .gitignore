@@ -13,3 +13,4 @@ test-results/
 .vercel
 .turbo
 *.tsbuildinfo
+demo-video/

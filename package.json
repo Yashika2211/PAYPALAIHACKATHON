@@ -20,7 +20,8 @@
     "cron:expire": "tsx --env-file-if-exists=.env scripts/cron-expire.ts",
     "e2e": "playwright test",
     "bootstrap": "docker compose up -d --wait && drizzle-kit migrate && tsx --env-file-if-exists=.env scripts/seed.ts",
-    "cache:export": "tsx --env-file-if-exists=.env scripts/cache-export.ts"
+    "cache:export": "tsx --env-file-if-exists=.env scripts/cache-export.ts",
+    "demo:record": "node scripts/record-demo.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
