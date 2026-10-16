@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db, schema } from "@/lib/db/client";
 import { normalizeTags } from "@/lib/agents/catalog-extractor";
 import { handle } from "@/lib/http";
+import { limit } from "@/lib/rate-limit";
 import { structured } from "@/lib/llm/provider";
 
 const Body = z.object({
@@ -39,6 +40,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   return handle(async () => {
+    limit(req, "onboard");
     const body = Body.parse(await req.json());
     const platform = process.env.SANDBOX_PLATFORM_EMAIL?.toLowerCase();
     if (platform && body.payoutEmail.toLowerCase() === platform) {

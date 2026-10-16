@@ -4,6 +4,7 @@ import { db, schema } from "@/lib/db/client";
 import { AUTO_CAPTURE_CONFIDENCE, verifyDelivery } from "@/lib/agents/delivery-verifier";
 import { emit } from "@/lib/events";
 import { handle } from "@/lib/http";
+import { limit } from "@/lib/rate-limit";
 import { deliver } from "@/lib/orders";
 
 const Body = z.object({
@@ -15,6 +16,7 @@ const Body = z.object({
 /** Merchant uploads a fulfilment photo; the AI check decides whether the system may capture on its own. */
 export async function POST(req: Request, ctx: RouteContext<"/api/allocations/[id]/verify">) {
   return handle(async () => {
+    limit(req, "verify");
     const { id } = await ctx.params;
     const body = Body.parse(await req.json());
     const alloc = await db.query.merchantAllocations.findFirst({ where: eq(schema.merchantAllocations.id, id) });

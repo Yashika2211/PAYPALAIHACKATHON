@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, schema } from "@/lib/db/client";
 import { extractCatalog } from "@/lib/agents/catalog-extractor";
 import { handle } from "@/lib/http";
+import { limit } from "@/lib/rate-limit";
 
 const Body = z.object({
   text: z.string().max(20_000).optional(),
@@ -17,6 +18,7 @@ const Body = z.object({
 
 export async function POST(req: Request) {
   return handle(async () => {
+    limit(req, "extract");
     const body = Body.parse(await req.json());
     if (!body.text?.trim() && !body.file) throw new Error("Upload a menu photo or PDF, or paste your price list.");
     const live = await db.selectDistinct({ category: schema.merchants.category }).from(schema.merchants).where(eq(schema.merchants.status, "live"));
