@@ -47,7 +47,7 @@ export async function getAccessToken(): Promise<string> {
 }
 
 export interface PayPalRequest {
-  method: "GET" | "POST" | "PATCH";
+  method: "GET" | "POST" | "PATCH" | "DELETE";
   path: string;
   body?: unknown;
   /** Stable key for this logical operation; reused across retries so PayPal dedupes. */

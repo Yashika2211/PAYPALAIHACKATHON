@@ -20,7 +20,9 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/rfqs/[id]">) {
     const payouts = allocations.length
       ? await db.query.payouts.findMany({ where: inArray(schema.payouts.allocationId, allocations.map((a) => a.id)) })
       : [];
+    const vault = await db.query.buyerVault.findFirst({ where: eq(schema.buyerVault.buyerEmail, rfq.buyerEmail) });
     return {
+      vault: vault ? { brand: vault.brand, lastDigits: vault.lastDigits } : null,
       rfq,
       merchants: merchants.map((m) => ({ id: m.id, name: m.name, category: m.category, tagline: m.tagline, status: m.status, personality: m.personality })),
       mandate: mandate && { ...mandate, signature: `${mandate.signature.slice(0, 12)}…` },

@@ -12,10 +12,21 @@ interface Need {
   vegetarianShare: number;
 }
 interface Snapshot {
+  vault: null | { brand: string | null; lastDigits: string | null };
   rfq: { id: string; rawRequest: string; status: string; lineItems: Need[]; budgetHintCents: number | null; deadline: string | null };
   merchants: Array<{ id: string; name: string; category: string; status: string; tagline: string; personality: string }>;
   mandate: null | { id: string; status: string; budgetCapCents: number; spentCents: number; approvalThresholdCents: number; expiresAt: string; signature: string };
-  order: null | { id: string; state: string; totalCents: number; firstQuoteTotalCents: number | null; rationale: string; paypalOrderId: string | null; paypalAuthorizationId: string | null };
+  order: null | {
+    id: string;
+    state: string;
+    totalCents: number;
+    firstQuoteTotalCents: number | null;
+    rationale: string;
+    paypalOrderId: string | null;
+    paypalAuthorizationId: string | null;
+    paymentMethod: string | null;
+    autoApproved: boolean;
+  };
   allocations: Array<{
     id: string;
     merchantId: string;
@@ -30,6 +41,7 @@ interface Snapshot {
 }
 interface FeedEvent {
   seq: number;
+  orderId: string | null;
   kind: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- event payloads are heterogeneous JSON, rendered defensively
   payload: Record<string, any>;
@@ -50,7 +62,7 @@ async function api<T>(url: string, body?: unknown): Promise<T> {
   return data;
 }
 
-const REFRESH_KINDS = ["bundle_ready", "bundle_failed", "paypal", "order_state", "payout", "mandate_signed", "quarantine", "negotiation_done", "delivery"];
+const REFRESH_KINDS = ["bundle_ready", "bundle_failed", "paypal", "order_state", "payout", "mandate_signed", "quarantine", "negotiation_done", "delivery", "approval_needed"];
 
 /**
  * Live events over Server-Sent Events, with polling as a fallback if the stream
@@ -198,7 +210,7 @@ export function BuyFlow({ id }: { id: string }) {
           {!mandate || mandate.status !== "active" ? (
             <MandateForm snap={snap} onSigned={refresh} />
           ) : (
-            <MandateBadge mandate={mandate} />
+            <MandateBadge mandate={mandate} vault={snap.vault} onChange={refresh} />
           )}
 
           {mandate?.status === "active" && rfq.status === "planning" && !started && (
@@ -222,7 +234,7 @@ export function BuyFlow({ id }: { id: string }) {
             </p>
           )}
 
-          {order && <BundlePanel snap={snap} busy={busy} run={run} onAuthorized={refresh} onError={setError} />}
+          {order && <BundlePanel snap={snap} events={events} busy={busy} run={run} onAuthorized={refresh} onError={setError} />}
 
           {error && <p className="rounded-md border border-bad/30 bg-bad-soft px-4 py-3 text-sm text-bad">{error}</p>}
         </div>
@@ -236,7 +248,8 @@ export function BuyFlow({ id }: { id: string }) {
   );
 }
 
-function MandateBadge({ mandate }: { mandate: NonNullable<Snapshot["mandate"]> }) {
+function MandateBadge({ mandate, vault, onChange }: { mandate: NonNullable<Snapshot["mandate"]>; vault: Snapshot["vault"]; onChange: () => void }) {
+  const [removing, setRemoving] = useState(false);
   const used = Math.min(100, Math.round((mandate.spentCents / mandate.budgetCapCents) * 100));
   return (
     <Card className="p-5">
@@ -263,6 +276,33 @@ function MandateBadge({ mandate }: { mandate: NonNullable<Snapshot["mandate"]> }
       </div>
       <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-sunken">
         <div className="h-full rounded-full bg-accent transition-all duration-700" style={{ width: `${used}%` }} />
+      </div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-sm">
+        {vault ? (
+          <>
+            <span>
+              <Pill tone="accent">PayPal Vault</Pill>{" "}
+              <span className="text-muted">
+                Your agent can pay with your saved {vault.brand?.toLowerCase() ?? "card"} •••• {vault.lastDigits} for bundles up to{" "}
+                <b className="text-ink">{formatUsd(mandate.approvalThresholdCents)}</b>. Above that, it asks you.
+              </span>
+            </span>
+            <button
+              className="text-xs text-muted underline-offset-4 hover:text-bad hover:underline"
+              disabled={removing}
+              onClick={async () => {
+                setRemoving(true);
+                await fetch("/api/vault", { method: "DELETE" });
+                setRemoving(false);
+                onChange();
+              }}
+            >
+              {removing ? "Removing…" : "Remove saved method"}
+            </button>
+          </>
+        ) : (
+          <span className="text-muted">No saved payment method. Your agent will ask you to approve every purchase.</span>
+        )}
       </div>
     </Card>
   );
@@ -462,12 +502,14 @@ function TheaterRow({ e }: { e: FeedEvent }) {
 
 function BundlePanel({
   snap,
+  events,
   busy,
   run,
   onAuthorized,
   onError,
 }: {
   snap: Snapshot;
+  events: FeedEvent[];
   busy: string;
   run: (label: string, fn: () => Promise<unknown>) => () => Promise<void>;
   onAuthorized: () => void;
@@ -476,6 +518,8 @@ function BundlePanel({
   const order = snap.order!;
   const saved = order.firstQuoteTotalCents ? order.firstQuoteTotalCents - order.totalCents : 0;
   const name = (mid: string) => snap.merchants.find((m) => m.id === mid)?.name ?? "Merchant";
+  const approvalEvent = [...events].reverse().find((e) => e.kind === "approval_needed" && e.orderId === order.id);
+  const approvalReason = approvalEvent ? (approvalEvent.payload.reasons as string[]).join("; ") : null;
   return (
     <Card className="rise overflow-hidden">
       <div className="grid gap-6 border-b border-line p-5 sm:grid-cols-[1fr_auto]">
@@ -496,6 +540,21 @@ function BundlePanel({
         </div>
       </div>
 
+      {order.autoApproved && (
+        <div className="flex items-start gap-3 border-b border-line bg-good-soft/60 px-5 py-3 text-sm">
+          <Pill tone="good">Agent paid</Pill>
+          <p className="text-ink">
+            Your agent authorized this on its own with your saved PayPal Vault method: {formatUsd(order.totalCents)} is within your auto-approve limit. The funds are
+            only held until each merchant delivers.
+          </p>
+        </div>
+      )}
+      {approvalReason && order.state === "mandate_signed" && (
+        <div className="flex items-start gap-3 border-b border-line bg-warn-soft/60 px-5 py-3 text-sm">
+          <Pill tone="warn">Needs you</Pill>
+          <p className="text-ink">Your agent didn&apos;t pay on its own: {approvalReason}.</p>
+        </div>
+      )}
       <ul className="divide-y divide-line">
         {snap.allocations.map((a) => (
           <AllocationRow
@@ -695,6 +754,7 @@ function DebugPanel({ orderId, version }: { orderId: string; version: string }) 
 function PayPalCheckout({ orderId, onAuthorized, onError }: { orderId: string; onAuthorized: () => void; onError: (m: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<"loading" | "ready" | "processing">("loading");
+  const [saveForAgent, setSaveForAgent] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -757,7 +817,7 @@ function PayPalCheckout({ orderId, onAuthorized, onError }: { orderId: string; o
           onClick={async () => {
             setState("processing");
             try {
-              await api(`/api/orders/${orderId}/test-card`, {});
+              await api(`/api/orders/${orderId}/test-card`, { saveForAgent });
               onAuthorized();
             } catch (e) {
               onError((e as Error).message);
@@ -768,6 +828,10 @@ function PayPalCheckout({ orderId, onAuthorized, onError }: { orderId: string; o
         >
           No sandbox login? Use PayPal&apos;s sandbox test card
         </button>
+        <label className="mt-2 flex items-start gap-2 text-xs text-muted">
+          <input type="checkbox" checked={saveForAgent} onChange={(e) => setSaveForAgent(e.target.checked)} className="mt-0.5 accent-[var(--accent)]" />
+          Save the card in PayPal Vault so my agent can pay on its own for bundles under my auto-approve limit.
+        </label>
       </div>
     </div>
   );
@@ -809,6 +873,8 @@ function FirewallFeed({ events }: { events: FeedEvent[] }) {
 
 const PAYPAL_STEP: Record<string, string> = {
   order_created: "PayPal order created",
+  vaulted: "Card saved in PayPal Vault",
+  auto_approved: "Agent paid with saved method",
   approved_webhook: "Buyer approved",
   authorized: "Funds authorized (held)",
   captured: "Merchant share captured",

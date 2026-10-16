@@ -8,6 +8,7 @@ const EXAMPLES = [
   "Catering plus printed name badges for a 40-person workshop this Friday, at least half vegetarian, total under $800.",
   "Vegan desserts and table flowers for a 60-person team dinner on Thursday, budget $900.",
   "Lunch and 25 name badges for a board meeting tomorrow, all vegetarian, under $500.",
+  "25 printed name badges for Thursday's board meeting, under $150.",
 ];
 
 export default function NewRequest() {

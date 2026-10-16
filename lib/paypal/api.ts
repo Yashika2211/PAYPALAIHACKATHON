@@ -11,6 +11,13 @@ interface Link {
 
 export interface PayPalOrder {
   id: string;
+  payment_source?: {
+    card?: {
+      last_digits?: string;
+      brand?: string;
+      attributes?: { vault?: { id?: string; status?: string; customer?: { id?: string } } };
+    };
+  };
   status: "CREATED" | "SAVED" | "APPROVED" | "VOIDED" | "COMPLETED" | "PAYER_ACTION_REQUIRED";
   links: Link[];
   purchase_units?: Array<{
@@ -43,21 +50,51 @@ export interface OrderLine {
  * Orders v2: one AUTHORIZE purchase unit per bundle, one item per merchant.
  * (Multi-unit AUTHORIZE is rejected by PayPal with UNSUPPORTED_INTENT.)
  */
-/** PayPal's published sandbox Visa. Only ever used against the sandbox API. */
-export const SANDBOX_TEST_CARD = { number: "4032039317984658", expiry: "2030-12", name: "Haggle Sandbox Buyer", security_code: "123" };
+/** Standard sandbox test Visa (also accepted by Vault). Only ever used against the sandbox API. */
+export const SANDBOX_TEST_CARD = { number: "4111111111111111", expiry: "2030-12", name: "Haggle Sandbox Buyer", security_code: "123" };
+
+/** How the buyer pays for an AUTHORIZE order. */
+export type PaymentSource =
+  | { kind: "paypal" }
+  | { kind: "card"; saveToVault?: boolean; customerId?: string }
+  /** Agent-initiated payment with a saved Vault token (buyer not present). */
+  | { kind: "vault"; vaultId: string };
+
+function paymentSourceBody(source: PaymentSource) {
+  switch (source.kind) {
+    case "paypal":
+      return { paypal: { experience_context: { brand_name: "Haggle", shipping_preference: "NO_SHIPPING", user_action: "CONTINUE" } } };
+    case "card":
+      return {
+        card: {
+          ...SANDBOX_TEST_CARD,
+          ...(source.saveToVault
+            ? { attributes: { vault: { store_in_vault: "ON_SUCCESS" }, ...(source.customerId ? { customer: { id: source.customerId } } : {}) } }
+            : {}),
+        },
+      };
+    case "vault":
+      return {
+        card: {
+          vault_id: source.vaultId,
+          stored_credential: { payment_initiator: "MERCHANT", payment_type: "UNSCHEDULED", usage: "SUBSEQUENT" },
+        },
+      };
+  }
+}
 
 export function createAuthorizeOrder(args: {
   orderId: string;
   lines: OrderLine[];
   description: string;
-  /** Server-side sandbox card instead of the PayPal wallet popup. */
-  testCard?: boolean;
+  source?: PaymentSource;
 }) {
+  const source = args.source ?? { kind: "paypal" };
   const total = args.lines.reduce((s, l) => s + l.amountCents, 0);
   return paypalRequest<PayPalOrder>({
     method: "POST",
     path: "/v2/checkout/orders",
-    requestId: `order-create-${args.orderId}${args.testCard ? "-card" : ""}`,
+    requestId: `order-create-${args.orderId}-${source.kind}`,
     orderId: args.orderId,
     body: {
       intent: "AUTHORIZE",
@@ -81,17 +118,7 @@ export function createAuthorizeOrder(args: {
           })),
         },
       ],
-      payment_source: args.testCard
-        ? { card: SANDBOX_TEST_CARD }
-        : {
-            paypal: {
-              experience_context: {
-                brand_name: "Haggle",
-                shipping_preference: "NO_SHIPPING",
-                user_action: "CONTINUE",
-              },
-            },
-          },
+      payment_source: paymentSourceBody(source),
     },
   });
 }
@@ -206,4 +233,55 @@ export function createPayout(args: {
 
 export function getPayoutBatch(batchId: string, orderId?: string) {
   return paypalRequest<PayoutBatch>({ method: "GET", path: `/v1/payments/payouts/${batchId}`, orderId });
+}
+
+// ── Vault v3 ────────────────────────────────────────────────
+
+export interface PaymentToken {
+  id: string;
+  customer?: { id: string };
+  payment_source: { card?: { last_digits?: string; brand?: string; expiry?: string } };
+}
+
+export function listPaymentTokens(customerId: string) {
+  return paypalRequest<{ payment_tokens?: PaymentToken[] }>({ method: "GET", path: `/v3/vault/payment-tokens?customer_id=${encodeURIComponent(customerId)}` });
+}
+
+export function deletePaymentToken(tokenId: string) {
+  return paypalRequest<null>({ method: "DELETE", path: `/v3/vault/payment-tokens/${tokenId}` });
+}
+
+// ── Invoicing v2 ────────────────────────────────────────────
+
+export interface Invoice {
+  id: string;
+  status: string;
+  detail?: { invoice_number?: string; metadata?: { recipient_view_url?: string } };
+  amount?: { value: string };
+  links?: Array<{ rel: string; href: string }>;
+}
+
+export function getInvoice(invoiceId: string, orderId?: string) {
+  return paypalRequest<Invoice>({ method: "GET", path: `/v2/invoicing/invoices/${invoiceId}`, orderId });
+}
+
+/** Records an off-PayPal payment (e.g. bank transfer) against an invoice, which marks it paid. */
+export function recordInvoicePayment(invoiceId: string, amountCents: number, orderId: string) {
+  return paypalRequest<{ payment_id: string }>({
+    method: "POST",
+    path: `/v2/invoicing/invoices/${invoiceId}/payments`,
+    requestId: `invoice-pay-${invoiceId}`,
+    orderId,
+    body: { method: "BANK_TRANSFER", payment_date: new Date().toISOString().slice(0, 10), amount: { currency_code: "USD", value: toValue(amountCents) }, note: "Recorded by Haggle" },
+  });
+}
+
+export function cancelInvoice(invoiceId: string, orderId: string) {
+  return paypalRequest<null>({
+    method: "POST",
+    path: `/v2/invoicing/invoices/${invoiceId}/cancel`,
+    requestId: `invoice-cancel-${invoiceId}`,
+    orderId,
+    body: { subject: "Haggle order cancelled", note: "This invoice was cancelled.", send_to_recipient: true, send_to_invoicer: true },
+  });
 }

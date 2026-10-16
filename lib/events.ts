@@ -16,7 +16,8 @@ export type EventKind =
   | "paypal"
   | "order_state"
   | "delivery"
-  | "payout";
+  | "payout"
+  | "approval_needed";
 
 export async function emit(
   kind: EventKind,

@@ -83,6 +83,20 @@ describe("ledger reducer", () => {
     expect(r).toMatchObject({ rounds: [], amountCents: 500, status: "blocked" });
   });
 
+  it("records vaulting and agent-initiated authorizations", () => {
+    const r = buildLedger([
+      ev("paypal", { step: "vaulted", brand: "VISA", lastDigits: "1111" }, "o5"),
+      ev("paypal", { step: "vaulted" }, "o6"),
+      ev("paypal", { step: "auto_approved", amountCents: 8000, lastDigits: "1111" }, "o5"),
+      ev("paypal", { step: "auto_approved", amountCents: 1 }, "o7"),
+      ev("paypal", { step: "authorized", authorizationId: "A5", amountCents: 8000 }, "o5"),
+    ]);
+    expect(r.get("vault:o5")).toMatchObject({ type: "Vault", detail: "VISA •••• 1111 saved for agent payments" });
+    expect(r.get("vault:o6")?.detail).toBe("Card •••• ? saved for agent payments");
+    expect(r.get("auth:o5")).toMatchObject({ party: "Buyer agent (Vault)", status: "held", detail: "Authorization A5 · agent-initiated" });
+    expect(r.get("auth:o7")?.detail).toContain("•••• ?");
+  });
+
   it("totals the ledger", () => {
     expect(totals(rows.values())).toEqual({
       heldCents: 71200,

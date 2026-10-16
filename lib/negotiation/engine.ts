@@ -7,6 +7,7 @@ import { merchantReply, type CatalogEntry, type MerchantProfile } from "@/lib/ag
 import { MAX_ROUNDS, type Offer } from "@/lib/agents/protocol";
 import { solveBundle, type CandidateOffer } from "./bundle-solver";
 import { transition } from "@/lib/state/order-machine";
+import { autoApprove } from "@/lib/orders";
 
 interface NegotiationOutcome {
   merchant: MerchantProfile;
@@ -262,5 +263,13 @@ export async function runNegotiation(rfqId: string) {
     { orderId: order.id, totalCents: order.totalCents, firstQuoteTotalCents: order.firstQuoteTotalCents, rationale },
     { rfqId, orderId: order.id },
   );
+
+  // With a saved PayPal Vault method, the agent pays on its own, but only if the firewall
+  // allows it (at or under the mandate's auto-approve threshold). Otherwise it waits for the buyer.
+  try {
+    await autoApprove(order.id);
+  } catch (err) {
+    await emit("approval_needed", { reasons: [`Agent payment failed: ${err instanceof Error ? err.message : String(err)}`], totalCents: order.totalCents }, { rfqId, orderId: order.id });
+  }
   return { ok: true as const, orderId: order.id };
 }

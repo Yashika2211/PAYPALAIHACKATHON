@@ -155,6 +155,10 @@ export const orders = pgTable("orders", {
   totalCents: integer("total_cents").notNull(),
   firstQuoteTotalCents: integer("first_quote_total_cents"),
   platformFeeBps: integer("platform_fee_bps").notNull().default(300),
+  // paypal (wallet popup) | card (sandbox test card) | vault (agent paid with a saved method) | invoice (net terms)
+  paymentMethod: text("payment_method"),
+  autoApproved: boolean("auto_approved").notNull().default(false),
+  paypalInvoiceId: text("paypal_invoice_id"),
   rationale: text("rationale").notNull().default(""),
   ...timestamps,
 });
@@ -263,4 +267,15 @@ export const llmCache = pgTable("llm_cache", {
   value: jsonb("value").notNull(),
   model: text("model").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// A buyer's saved PayPal Vault payment token, so their agent can pay under the mandate threshold.
+export const buyerVault = pgTable("buyer_vault", {
+  id: id(),
+  buyerEmail: text("buyer_email").notNull().unique(),
+  paypalCustomerId: text("paypal_customer_id").notNull(),
+  vaultId: text("vault_id").notNull(),
+  brand: text("brand"),
+  lastDigits: text("last_digits"),
+  ...timestamps,
 });

@@ -4,7 +4,7 @@
  * Rows are keyed by the entity they describe, so later events update them in place.
  */
 
-export type LedgerType = "Quote" | "Firewall" | "Bundle" | "Authorization" | "Capture" | "Payout" | "Fee" | "Void" | "Refund" | "Delivery";
+export type LedgerType = "Quote" | "Firewall" | "Bundle" | "Authorization" | "Capture" | "Payout" | "Fee" | "Void" | "Refund" | "Delivery" | "Vault";
 
 export interface LedgerRow {
   id: string;
@@ -91,8 +91,34 @@ export function reduceEvent(rows: ReadonlyMap<string, LedgerRow>, e: LedgerEvent
       ];
     case "paypal":
       switch (p.step) {
-        case "authorized":
-          return [upsert(`auth:${e.orderId}`, { ...base, type: "Authorization", party: "PayPal", amountCents: p.amountCents, status: "held", detail: `Authorization ${p.authorizationId}` })];
+        case "auto_approved":
+          return [
+            upsert(`auth:${e.orderId}`, {
+              ...base,
+              type: "Authorization",
+              party: "Buyer agent (Vault)",
+              amountCents: p.amountCents,
+              status: "agent paid",
+              detail: `Agent-initiated with saved card •••• ${p.lastDigits ?? "?"}, within the auto-approve limit`,
+            }),
+          ];
+        case "authorized": {
+          const prev = rows.get(`auth:${e.orderId}`);
+          return [
+            upsert(`auth:${e.orderId}`, {
+              ...base,
+              type: "Authorization",
+              party: prev?.party ?? "PayPal",
+              amountCents: p.amountCents,
+              status: "held",
+              detail: `Authorization ${p.authorizationId}${prev ? " · agent-initiated" : ""}`,
+            }),
+          ];
+        }
+        case "vaulted":
+          return [
+            upsert(`vault:${e.orderId}`, { ...base, type: "Vault", party: "PayPal Vault", amountCents: null, status: "saved", detail: `${p.brand ?? "Card"} •••• ${p.lastDigits ?? "?"} saved for agent payments` }),
+          ];
         case "captured": {
           const out = [upsert(`cap:${p.allocationId}`, { ...base, type: "Capture", party: p.merchant ?? "Merchant", amountCents: p.amountCents, status: "captured", detail: `Capture ${p.captureId}` })];
           const auth = rows.get(`auth:${e.orderId}`);

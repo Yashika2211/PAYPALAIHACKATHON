@@ -41,17 +41,21 @@ export async function recomputeOrderState(orderId: string): Promise<OrderState> 
   }
 }
 
-/** Runs the human's approval of the bundle through the firewall. */
-async function approveBundle(order: typeof schema.orders.$inferSelect, allocations: Array<typeof schema.merchantAllocations.$inferSelect>) {
+/** Runs approval of the bundle through the firewall, as the human buyer or as their agent. */
+async function approveBundle(
+  order: typeof schema.orders.$inferSelect,
+  allocations: Array<typeof schema.merchantAllocations.$inferSelect>,
+  actor: "human" | "buyer_agent" = "human",
+) {
   if (order.state !== "mandate_signed") throw new Error(`Order is ${order.state}`);
 
   const merchants = await categoryOf(allocations.map((a) => a.merchantId));
-  const decision = await guard({
+  return guard({
     mandateId: order.mandateId,
     rfqId: order.rfqId,
     orderId: order.id,
-    actor: "human",
-    actorLabel: "buyer (approve bundle)",
+    actor,
+    actorLabel: actor === "human" ? "buyer (approve bundle)" : "buyer-agent (auto-approve)",
     action: {
       type: "authorize_payment",
       amountCents: order.totalCents,
@@ -62,47 +66,117 @@ async function approveBundle(order: typeof schema.orders.$inferSelect, allocatio
       })),
     },
   });
+}
+
+async function requireApproval(order: typeof schema.orders.$inferSelect, allocations: Array<typeof schema.merchantAllocations.$inferSelect>) {
+  const decision = await approveBundle(order, allocations, "human");
   if (decision.decision !== "allow") throw new Error(`Mandate Firewall: ${decision.reasons.join("; ")}`);
 }
+
+const orderLines = (allocations: Array<typeof schema.merchantAllocations.$inferSelect>) =>
+  allocations.map((a) => ({ merchantId: a.merchantId, name: a.description, amountCents: a.amountCents }));
 
 /** Creates the PayPal AUTHORIZE order after the human approves the bundle. */
 export async function createPaypalOrder(orderId: string) {
   const { order, allocations } = await loadOrder(orderId);
-  if (order.paypalOrderId) return order.paypalOrderId;
-  await approveBundle(order, allocations);
+  if (order.paypalOrderId && order.paymentMethod === "paypal") return order.paypalOrderId;
+  await requireApproval(order, allocations);
 
-  const created = await pp.createAuthorizeOrder({
-    orderId,
-    description: `Haggle bundle (${allocations.length} merchants)`,
-    lines: allocations.map((a) => ({ merchantId: a.merchantId, name: a.description, amountCents: a.amountCents })),
-  });
-  await db.update(schema.orders).set({ paypalOrderId: created.id }).where(eq(schema.orders.id, orderId));
+  const created = await pp.createAuthorizeOrder({ orderId, description: `Haggle bundle (${allocations.length} merchants)`, lines: orderLines(allocations) });
+  await db.update(schema.orders).set({ paypalOrderId: created.id, paymentMethod: "paypal" }).where(eq(schema.orders.id, orderId));
   await emit("paypal", { step: "order_created", paypalOrderId: created.id, status: created.status }, { rfqId: order.rfqId, orderId });
   return created.id;
+}
+
+/** Stores the Vault token PayPal returned, so this buyer's agent can pay on its own later. */
+async function saveVaultToken(buyerEmail: string, created: pp.PayPalOrder) {
+  const card = created.payment_source?.card;
+  const vault = card?.attributes?.vault;
+  if (!vault?.id || !vault.customer?.id) return null;
+  const values = { buyerEmail, paypalCustomerId: vault.customer.id, vaultId: vault.id, brand: card?.brand ?? null, lastDigits: card?.last_digits ?? null };
+  await db.insert(schema.buyerVault).values(values).onConflictDoUpdate({ target: schema.buyerVault.buyerEmail, set: { ...values, updatedAt: new Date() } });
+  return values;
 }
 
 /**
  * Sandbox-only checkout with PayPal's test card: the order is created and
  * authorized in one server call, so judges can run the flow without a sandbox login.
+ * With saveForAgent, the card is stored in PayPal Vault for agent-initiated payments.
  */
-export async function payWithSandboxCard(orderId: string) {
+export async function payWithSandboxCard(orderId: string, opts: { saveForAgent?: boolean } = {}) {
   if (process.env.PAYPAL_ENV === "live") throw new Error("Test cards are sandbox-only");
   const { order, allocations } = await loadOrder(orderId);
   if (order.paypalAuthorizationId) return order.paypalAuthorizationId;
-  await approveBundle(order, allocations);
+  await requireApproval(order, allocations);
 
+  const rfq = await db.query.rfqs.findFirst({ where: eq(schema.rfqs.id, order.rfqId) });
+  const existing = rfq ? await db.query.buyerVault.findFirst({ where: eq(schema.buyerVault.buyerEmail, rfq.buyerEmail) }) : undefined;
   const created = await pp.createAuthorizeOrder({
     orderId,
-    testCard: true,
+    source: { kind: "card", saveToVault: opts.saveForAgent, customerId: existing?.paypalCustomerId },
     description: `Haggle bundle (${allocations.length} merchants)`,
-    lines: allocations.map((a) => ({ merchantId: a.merchantId, name: a.description, amountCents: a.amountCents })),
+    lines: orderLines(allocations),
   });
-  await db.update(schema.orders).set({ paypalOrderId: created.id }).where(eq(schema.orders.id, orderId));
+  await db.update(schema.orders).set({ paypalOrderId: created.id, paymentMethod: "card" }).where(eq(schema.orders.id, orderId));
   await emit("paypal", { step: "order_created", paypalOrderId: created.id, status: created.status, source: "sandbox_card" }, { rfqId: order.rfqId, orderId });
+  if (opts.saveForAgent && rfq) {
+    const saved = await saveVaultToken(rfq.buyerEmail, created);
+    if (saved) await emit("paypal", { step: "vaulted", lastDigits: saved.lastDigits, brand: saved.brand }, { rfqId: order.rfqId, orderId });
+  }
   const auth = created.purchase_units?.[0]?.payments?.authorizations?.[0];
   if (!auth) throw new Error(`PayPal did not authorize the card (status ${created.status})`);
   await applyAuthorization(orderId, auth.id, auth.status);
   return auth.id;
+}
+
+export type AutoApproveResult =
+  | { status: "authorized"; authorizationId: string }
+  | { status: "needs_human"; reasons: string[] }
+  | { status: "no_saved_method" | "denied" | "skipped"; reasons?: string[] };
+
+/**
+ * The buyer agent pays on its own with the buyer's saved Vault token, but only when
+ * the Mandate Firewall allows it (at or under the auto-approve threshold). Anything
+ * above the threshold comes back as needs_human and waits for the buyer.
+ */
+export async function autoApprove(orderId: string): Promise<AutoApproveResult> {
+  const { order, allocations } = await loadOrder(orderId);
+  if (order.state !== "mandate_signed" || order.paypalAuthorizationId) return { status: "skipped" };
+  const rfq = await db.query.rfqs.findFirst({ where: eq(schema.rfqs.id, order.rfqId) });
+  const saved = rfq ? await db.query.buyerVault.findFirst({ where: eq(schema.buyerVault.buyerEmail, rfq.buyerEmail) }) : undefined;
+  if (!saved) return { status: "no_saved_method" };
+
+  const decision = await approveBundle(order, allocations, "buyer_agent");
+  if (decision.decision === "needs_human") {
+    await emit("approval_needed", { reasons: decision.reasons, totalCents: order.totalCents }, { rfqId: order.rfqId, orderId });
+    return { status: "needs_human", reasons: decision.reasons };
+  }
+  if (decision.decision === "deny") return { status: "denied", reasons: decision.reasons };
+
+  const created = await pp.createAuthorizeOrder({
+    orderId,
+    source: { kind: "vault", vaultId: saved.vaultId },
+    description: `Haggle bundle (${allocations.length} merchants), agent-initiated`,
+    lines: orderLines(allocations),
+  });
+  const auth = created.purchase_units?.[0]?.payments?.authorizations?.[0];
+  await db.update(schema.orders).set({ paypalOrderId: created.id, paymentMethod: "vault", autoApproved: true }).where(eq(schema.orders.id, orderId));
+  await emit(
+    "paypal",
+    { step: "auto_approved", paypalOrderId: created.id, amountCents: order.totalCents, lastDigits: saved.lastDigits },
+    { rfqId: order.rfqId, orderId },
+  );
+  if (!auth) throw new Error(`PayPal did not authorize the saved method (status ${created.status})`);
+  await applyAuthorization(orderId, auth.id, auth.status);
+  return { status: "authorized", authorizationId: auth.id };
+}
+
+/** Removes the buyer's saved method from PayPal Vault and from Haggle. */
+export async function forgetSavedMethod(buyerEmail: string) {
+  const saved = await db.query.buyerVault.findFirst({ where: eq(schema.buyerVault.buyerEmail, buyerEmail) });
+  if (!saved) return;
+  await pp.deletePaymentToken(saved.vaultId);
+  await db.delete(schema.buyerVault).where(eq(schema.buyerVault.id, saved.id));
 }
 
 /** Called after buyer approval in the PayPal popup. Authorizes and applies PayPal's response. */
