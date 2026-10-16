@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { db, schema, sql } from "../lib/db/client";
 
 // Floors are private to the negotiation engine and never shown to an LLM.
@@ -135,6 +136,13 @@ async function main() {
     );
     console.log(`seeded ${m.name}${m.isRogue ? " (rogue)" : ""} -> payouts to ${m.payoutEmail}`);
   }
+
+  // Real AI answers for the bundled demo samples, replayed only if live AI is unavailable.
+  const cached = JSON.parse(readFileSync("scripts/fixtures/llm-cache.json", "utf8")) as Array<{ key: string; value: object; model: string }>;
+  for (const c of cached) {
+    await db.insert(schema.llmCache).values(c).onConflictDoNothing();
+  }
+  if (cached.length) console.log(`loaded ${cached.length} cached AI answer(s) for demo samples`);
   await sql.end();
 }
 
