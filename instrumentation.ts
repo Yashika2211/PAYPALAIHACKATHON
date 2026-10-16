@@ -8,7 +8,7 @@ export async function register() {
   const { expireAndRelease } = await import("./lib/maintenance");
   const sweep = () =>
     expireAndRelease()
-      .then((r) => (r.expiredMandates || r.staleHolds) && console.log("[maintenance]", r))
+      .then((r) => (r.expiredMandates || r.staleHolds || r.payoutsRetried) && console.log("[maintenance]", r))
       .catch((err) => console.error("[maintenance]", err instanceof Error ? err.message : err));
   setTimeout(sweep, 60_000);
   setInterval(sweep, 30 * 60_000).unref();

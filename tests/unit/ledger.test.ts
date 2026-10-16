@@ -110,6 +110,16 @@ describe("ledger reducer", () => {
     expect(r.has("invoice:missing")).toBe(false);
   });
 
+  it("shows a payout that failed before any batch existed, with its reason", () => {
+    const r = buildLedger([
+      ev("payout", { step: "failed", allocationId: "f1", merchant: "Inkwell", netCents: 100, reason: "INSUFFICIENT_FUNDS" }),
+      ev("payout", { step: "failed", allocationId: "f2" }),
+      ev("payout", { step: "failed", allocationId: "f1", reason: "INSUFFICIENT_FUNDS again" }),
+    ]);
+    expect(r.get("payout:f1")).toMatchObject({ status: "failed", detail: "Will retry: INSUFFICIENT_FUNDS again" });
+    expect(r.has("payout:f2")).toBe(false);
+  });
+
   it("totals the ledger", () => {
     expect(totals(rows.values())).toEqual({
       heldCents: 71200,

@@ -3,6 +3,7 @@ import { db, schema } from "@/lib/db/client";
 import { emit } from "@/lib/events";
 import { guard } from "@/lib/firewall";
 import * as pp from "@/lib/paypal/api";
+import { PayPalError } from "@/lib/paypal/client";
 import { deriveSettlementState, transition, type OrderState } from "@/lib/state/order-machine";
 import type { WebhookEvent } from "@/lib/paypal/webhooks";
 
@@ -298,20 +299,53 @@ export async function payoutAllocation(allocationId: string) {
         .returning();
   if (!row) return;
 
-  const batch = await pp.createPayout({
-    senderBatchId: `payout-${allocationId}`,
-    orderId: order.id,
-    items: [{ allocationId, email: merchant.payoutEmail, netCents, note: `Haggle order ${order.id.slice(0, 8)}: ${alloc.description}` }],
-  });
+  let batch: pp.PayoutBatch;
+  try {
+    batch = await pp.createPayout({
+      senderBatchId: `payout-${allocationId}-${row.attempts}`,
+      orderId: order.id,
+      items: [{ allocationId, email: merchant.payoutEmail, netCents, note: `Haggle order ${order.id.slice(0, 8)}: ${alloc.description}` }],
+    });
+  } catch (err) {
+    // The capture already happened; a payout problem must not undo or block it. Record it and retry later.
+    await recordPayoutFailure(row.id, err);
+    await emit(
+      "payout",
+      { step: "failed", allocationId, merchant: merchant.name, netCents, reason: payoutFailureReason(err) },
+      { rfqId: order.rfqId, orderId: order.id },
+    );
+    return;
+  }
   await db
     .update(schema.payouts)
-    .set({ payoutBatchId: batch.batch_header.payout_batch_id, payoutItemId: batch.items?.[0]?.payout_item_id })
+    .set({ payoutBatchId: batch.batch_header.payout_batch_id, payoutItemId: batch.items?.[0]?.payout_item_id, status: "pending", failureReason: null, attempts: row.attempts + 1 })
     .where(eq(schema.payouts.id, row.id));
   await emit(
     "payout",
     { step: "sent", allocationId, merchant: merchant.name, grossCents: alloc.amountCents, feeCents, netCents, batchId: batch.batch_header.payout_batch_id, status: batch.batch_header.batch_status },
     { rfqId: order.rfqId, orderId: order.id },
   );
+}
+
+function payoutFailureReason(err: unknown): string {
+  if (err instanceof PayPalError) {
+    const body = err.body as { name?: string; message?: string } | null;
+    return [body?.name, body?.message].filter(Boolean).join(": ") || err.message;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
+async function recordPayoutFailure(payoutId: string, err: unknown) {
+  const p = await db.query.payouts.findFirst({ where: eq(schema.payouts.id, payoutId) });
+  await db
+    .update(schema.payouts)
+    .set({ status: "failed", failureReason: payoutFailureReason(err).slice(0, 500), attempts: (p?.attempts ?? 0) + 1 })
+    .where(eq(schema.payouts.id, payoutId));
+}
+
+/** Payout failures worth retrying automatically (balance, PayPal outages), not bad recipients. */
+export function isRetryablePayoutFailure(reason: string | null): boolean {
+  return !!reason && /INSUFFICIENT_FUNDS|INTERNAL|SERVICE_UNAVAILABLE|TIMEOUT|network|5\d\d/i.test(reason) && !/SELF_PAY|RECEIVER|INVALID/i.test(reason);
 }
 
 /** Re-sends a failed or unclaimed payout to the merchant's current payout email. */
@@ -324,14 +358,20 @@ export async function retryPayout(allocationId: string) {
   const order = alloc && (await db.query.orders.findFirst({ where: eq(schema.orders.id, alloc.orderId) }));
   if (!alloc || !merchant || !order) throw new Error("Payout records are incomplete");
 
-  const batch = await pp.createPayout({
-    senderBatchId: `payout-${allocationId}-retry-${Date.now()}`,
-    orderId: order.id,
-    items: [{ allocationId, email: merchant.payoutEmail, netCents: payout.netCents, note: `Haggle order ${order.id.slice(0, 8)} (retry): ${alloc.description}` }],
-  });
+  let batch: pp.PayoutBatch;
+  try {
+    batch = await pp.createPayout({
+      senderBatchId: `payout-${allocationId}-retry-${Date.now()}`,
+      orderId: order.id,
+      items: [{ allocationId, email: merchant.payoutEmail, netCents: payout.netCents, note: `Haggle order ${order.id.slice(0, 8)} (retry): ${alloc.description}` }],
+    });
+  } catch (err) {
+    await recordPayoutFailure(payout.id, err);
+    throw new Error(`Payout still failing: ${payoutFailureReason(err)}`);
+  }
   await db
     .update(schema.payouts)
-    .set({ status: "pending", payoutBatchId: batch.batch_header.payout_batch_id, payoutItemId: batch.items?.[0]?.payout_item_id })
+    .set({ status: "pending", payoutBatchId: batch.batch_header.payout_batch_id, payoutItemId: batch.items?.[0]?.payout_item_id, failureReason: null, attempts: payout.attempts + 1 })
     .where(eq(schema.payouts.id, payout.id));
   await emit(
     "payout",
@@ -555,7 +595,9 @@ export async function processWebhookEvent(event: WebhookEvent): Promise<string> 
       const allocationId = r.payout_item?.sender_item_id ? String(r.payout_item.sender_item_id) : null;
       if (!allocationId) return "no sender_item_id";
       const status = event.event_type.endsWith("SUCCEEDED") ? "succeeded" : event.event_type.endsWith("FAILED") ? "failed" : "unclaimed";
-      const [p] = await db.update(schema.payouts).set({ status }).where(eq(schema.payouts.allocationId, allocationId)).returning();
+      const errors = r.errors as { name?: string; message?: string } | undefined;
+      const failureReason = status === "succeeded" ? null : [errors?.name, errors?.message].filter(Boolean).join(": ") || status;
+      const [p] = await db.update(schema.payouts).set({ status, failureReason }).where(eq(schema.payouts.allocationId, allocationId)).returning();
       if (p) {
         const alloc = await db.query.merchantAllocations.findFirst({ where: eq(schema.merchantAllocations.id, allocationId) });
         const order = alloc ? await db.query.orders.findFirst({ where: eq(schema.orders.id, alloc.orderId) }) : undefined;

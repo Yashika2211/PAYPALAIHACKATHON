@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fallbackReply, minUnitPrice, selectLines, type CatalogEntry, type MerchantProfile } from "@/lib/agents/merchant-agent";
 import { normalizeTags } from "@/lib/agents/catalog-extractor";
+import { isRetryablePayoutFailure } from "@/lib/orders";
 
 const item = (id: string, name: string, unit: string, list: number, tags: string[] = []): CatalogEntry => ({
   id,
@@ -55,5 +56,16 @@ describe("selectLines", () => {
       expect(l.unitPriceCents).toBe(minUnitPrice(tandoor.find((t) => t.id === l.catalogItemId)!, 15));
     }
     expect(second.message).toMatch(/\$/);
+  });
+});
+
+
+describe("isRetryablePayoutFailure", () => {
+  it("retries balance and outage failures, not bad recipients", () => {
+    expect(isRetryablePayoutFailure("INSUFFICIENT_FUNDS: Sender does not have sufficient funds")).toBe(true);
+    expect(isRetryablePayoutFailure("INTERNAL_SERVER_ERROR")).toBe(true);
+    expect(isRetryablePayoutFailure("SELF_PAY_NOT_ALLOWED: Payment to self is not allowed.")).toBe(false);
+    expect(isRetryablePayoutFailure("RECEIVER_UNREGISTERED")).toBe(false);
+    expect(isRetryablePayoutFailure(null)).toBe(false);
   });
 });

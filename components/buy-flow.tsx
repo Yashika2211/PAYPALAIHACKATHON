@@ -39,7 +39,7 @@ interface Snapshot {
     deliveredAt: string | null;
     verifierResult: null | { pass: boolean; confidence: number; reason: string; source: string };
   }>;
-  payouts: Array<{ allocationId: string; netCents: number; feeCents: number; status: string; payoutBatchId: string | null }>;
+  payouts: Array<{ allocationId: string; netCents: number; feeCents: number; status: string; payoutBatchId: string | null; failureReason: string | null }>;
 }
 interface FeedEvent {
   seq: number;
@@ -662,6 +662,7 @@ function AllocationRow({
             <p className="figures mt-1 text-xs text-muted">
               payout {formatUsd(payout.netCents)} · fee {formatUsd(payout.feeCents)} ·{" "}
               <span className={payout.status === "succeeded" ? "text-good" : payout.status === "failed" ? "text-bad" : ""}>{payout.status}</span>
+              {payout.status === "failed" && payout.failureReason && <span className="block text-bad">{payout.failureReason}. Haggle retries automatically.</span>}
             </p>
           )}
         </div>

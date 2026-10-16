@@ -164,8 +164,18 @@ export function reduceEvent(rows: ReadonlyMap<string, LedgerRow>, e: LedgerEvent
         ];
       }
       const prev = rows.get(id);
-      if (!prev) return [];
-      return [{ ...prev, ts: e.createdAt, status: p.step === "retried" ? "pending" : p.step, detail: p.batchId ? `Batch ${p.batchId}` : prev.detail }];
+      if (!prev) {
+        if (p.step !== "failed" || !p.merchant) return [];
+        return [upsert(id, { ...base, type: "Payout", party: p.merchant, amountCents: p.netCents, status: "failed", detail: `Will retry: ${p.reason}` })];
+      }
+      return [
+        {
+          ...prev,
+          ts: e.createdAt,
+          status: p.step === "retried" ? "pending" : p.step,
+          detail: p.batchId ? `Batch ${p.batchId}` : p.reason ? `Will retry: ${p.reason}` : prev.detail,
+        },
+      ];
     }
     case "delivery":
       return [

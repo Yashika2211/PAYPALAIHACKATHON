@@ -237,6 +237,8 @@ export const payouts = pgTable("payouts", {
   feeCents: integer("fee_cents").notNull(),
   netCents: integer("net_cents").notNull(),
   status: payoutStatus("status").notNull().default("pending"),
+  failureReason: text("failure_reason"),
+  attempts: integer("attempts").notNull().default(0),
   ...timestamps,
 });
 

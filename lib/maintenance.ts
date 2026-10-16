@@ -1,6 +1,6 @@
 import { and, eq, inArray, lt } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
-import { voidRemaining } from "@/lib/orders";
+import { isRetryablePayoutFailure, retryPayout, voidRemaining } from "@/lib/orders";
 
 /** PayPal's authorization honor period is 3 days; holds older than this are released. */
 const STALE_HOLD_DAYS = Number(process.env.STALE_HOLD_DAYS ?? 3);
@@ -26,5 +26,16 @@ export async function expireAndRelease(now = new Date()) {
       console.error(`[maintenance] could not release ${order.id}: ${err instanceof Error ? err.message : err}`);
     }
   }
-  return { expiredMandates: expired.length, staleHolds: stale.length, released };
+  // Payouts that failed for transient reasons (e.g. platform balance) are retried, up to 5 attempts.
+  const failed = await db.query.payouts.findMany({ where: and(eq(schema.payouts.status, "failed"), lt(schema.payouts.attempts, 5)) });
+  let retried = 0;
+  for (const p of failed.filter((f) => isRetryablePayoutFailure(f.failureReason))) {
+    try {
+      await retryPayout(p.allocationId);
+      retried++;
+    } catch {
+      /* recorded on the payout row; next sweep tries again */
+    }
+  }
+  return { expiredMandates: expired.length, staleHolds: stale.length, released, payoutsRetried: retried };
 }

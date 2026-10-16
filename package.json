@@ -24,7 +24,8 @@
     "demo:record": "node scripts/record-demo.mjs",
     "e2e:vault": "tsx scripts/e2e-vault.ts",
     "e2e:invoice": "tsx scripts/e2e-invoice.ts",
-    "mcp:smoke": "tsx scripts/mcp-smoke.ts"
+    "mcp:smoke": "tsx scripts/mcp-smoke.ts",
+    "sandbox:fund": "tsx --env-file-if-exists=.env scripts/fund-sandbox.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
