@@ -38,6 +38,24 @@ function toolkitTools(): Record<string, V4Tool> {
 
 const callToolkit = (name: string, args: unknown) => toolkitTools()[name].execute(args, { toolCallId: `haggle-${name}`, messages: [] });
 
+/**
+ * Checks a model-proposed invoice against the approved bundle. Pure, so it is
+ * unit-tested: the payer and every amount must match exactly; wording is free.
+ */
+export function checkInvoiceDraft(
+  input: { recipient_email: string; items: Array<{ amount: string }> },
+  approved: { recipient: string; lines: Array<{ merchant: string; amountCents: number }> },
+): string[] {
+  const errors: string[] = [];
+  if (input.recipient_email.trim().toLowerCase() !== approved.recipient.toLowerCase()) errors.push(`recipient must be ${approved.recipient}`);
+  const want = approved.lines.map((e) => e.amountCents).sort((a, b) => a - b);
+  const got = input.items.map((i) => toCents(i.amount)).sort((a, b) => a - b);
+  if (got.some((c) => !Number.isFinite(c) || c <= 0) || want.length !== got.length || want.some((v, i) => v !== got[i])) {
+    errors.push(`items must be exactly: ${approved.lines.map((e) => `${e.merchant} ${toValue(e.amountCents)}`).join(", ")}`);
+  }
+  return errors;
+}
+
 export interface BillingResult {
   invoiceId: string;
   agent: string | null;
@@ -89,11 +107,8 @@ export async function issueInvoice(orderId: string): Promise<BillingResult> {
     execute: async (input) => {
       if (invoiceId) return { invoice_id: invoiceId, note: "Already created; send it." };
       // Code checks: the model may phrase the invoice, never change the money or the payer.
-      const errors: string[] = [];
-      if (input.recipient_email.trim().toLowerCase() !== recipient.toLowerCase()) errors.push(`recipient must be ${recipient}`);
-      const want = expected.map((e) => e.amountCents).sort((a, b) => a - b);
-      const got = input.items.map((i) => toCents(i.amount)).sort((a, b) => a - b);
-      if (want.length !== got.length || want.some((v, i) => v !== got[i])) errors.push(`items must be exactly: ${expected.map((e) => `${e.merchant} ${toValue(e.amountCents)}`).join(", ")}`);
+      const errors = checkInvoiceDraft(input, { recipient, lines: expected });
+      const got = input.items.map((i) => toCents(i.amount));
       const decision = await guard({
         mandateId: order.mandateId,
         rfqId: order.rfqId,

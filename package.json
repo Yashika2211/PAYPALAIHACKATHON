@@ -22,7 +22,8 @@
     "bootstrap": "docker compose up -d --wait && drizzle-kit migrate && tsx --env-file-if-exists=.env scripts/seed.ts",
     "cache:export": "tsx --env-file-if-exists=.env scripts/cache-export.ts",
     "demo:record": "node scripts/record-demo.mjs",
-    "e2e:vault": "tsx scripts/e2e-vault.ts"
+    "e2e:vault": "tsx scripts/e2e-vault.ts",
+    "e2e:invoice": "tsx scripts/e2e-invoice.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
