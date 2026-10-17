@@ -10,7 +10,7 @@ Every small business gets an AI salesperson. Every buyer gets an AI negotiator. 
 
 ![Haggle landing page](docs/screenshots/landing.png)
 
-> **Live demo:** _Render URL goes here after deploy_ · **Video (2:45):** _YouTube link_ · **License:** [MIT](LICENSE)
+> **Live demo:** [haggle-6xg1.onrender.com](https://haggle-6xg1.onrender.com) (free Render instance: the first visit after idle takes ~50 s to wake) · **Video:** _YouTube link_ · **License:** [MIT](LICENSE)
 
 ---
 
@@ -115,7 +115,7 @@ Webhook events handled: `CHECKOUT.ORDER.APPROVED`, `PAYMENT.AUTHORIZATION.CREATE
 ## Bring your own agent (MCP)
 
 ```bash
-claude mcp add --transport http haggle https://<your-haggle-host>/api/mcp
+claude mcp add --transport http haggle https://haggle-6xg1.onrender.com/api/mcp
 ```
 
 Then ask your agent something like *"Find me catering and name badges for 40 people on Friday, under $800, through Haggle"*:
@@ -157,7 +157,7 @@ The `events` table is an append-only feed. The Negotiation Theater and the ledge
 
 ## Judge quickstart (under 5 minutes)
 
-**Hosted:** open the live demo URL, then:
+**Hosted:** open [haggle-6xg1.onrender.com](https://haggle-6xg1.onrender.com), then:
 1. Click **I need something** and use the example request.
 2. Click **Sign mandate**, then **Start negotiating**. Watch the theater, including the rogue merchant being blocked.
 3. Under **Approve with PayPal**, either:

@@ -1,5 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createHaggleMcpServer } from "@/lib/mcp/server";
+import { publicOrigin } from "@/lib/origin";
 import { RateLimitError, limit } from "@/lib/rate-limit";
 
 /**
@@ -13,7 +14,7 @@ async function handleMcp(req: Request) {
     if (err instanceof RateLimitError) return Response.json({ error: err.message }, { status: 429 });
     throw err;
   }
-  const baseUrl = process.env.PUBLIC_BASE_URL ?? new URL(req.url).origin;
+  const baseUrl = publicOrigin(req);
   const server = createHaggleMcpServer(baseUrl);
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   await server.connect(transport);

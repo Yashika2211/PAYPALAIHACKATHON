@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { ThemeToggle, themeScript } from "@/components/theme-toggle";
+import { publicOrigin } from "@/lib/origin";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -11,7 +12,7 @@ const serif = Instrument_Serif({ variable: "--font-serif-display", subsets: ["la
 export const metadata: Metadata = {
   title: { default: "Haggle", template: "%s · Haggle" },
   description: "Every small business gets an AI salesperson. Every buyer gets an AI negotiator. PayPal makes the handshake real.",
-  metadataBase: new URL(process.env.PUBLIC_BASE_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(publicOrigin()),
   openGraph: { title: "Haggle", description: "Agentic commerce you can trust, on PayPal.", type: "website" },
 };
 

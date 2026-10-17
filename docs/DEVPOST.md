@@ -1,5 +1,7 @@
 # Haggle: Devpost write-up (draft)
 
+**Live demo:** https://haggle-6xg1.onrender.com · **Code:** https://github.com/Yashika2211/PAYPALAIHACKATHON
+
 **Tagline:** Every small business gets an AI salesperson. Every buyer gets an AI negotiator. PayPal makes the handshake real.
 
 **Built with:** PayPal Orders v2 · PayPal Payments v2 · PayPal Payouts · PayPal Vault · PayPal Invoicing · PayPal Agent Toolkit · PayPal Webhooks · PayPal JS SDK · Model Context Protocol · Google Gemini · Vercel AI SDK · Next.js · TypeScript · Tailwind CSS · AG Grid · PostgreSQL · Drizzle ORM · Render · Playwright · Vitest
