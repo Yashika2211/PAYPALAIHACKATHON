@@ -62,9 +62,9 @@ export function BuyFlow({ id }: { id: string }) {
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
-      <ol className="figures flex flex-wrap gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.12em]">
+      <ol aria-label="Progress" className="figures flex flex-wrap gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.12em]">
         {STEPS.map((s, i) => (
-          <li key={s} className={cx("flex items-center gap-2", i === step ? "text-ink" : i < step ? "text-muted" : "text-faint")}>
+          <li key={s} aria-current={i === step ? "step" : undefined} className={cx("flex items-center gap-2", i === step ? "text-ink" : i < step ? "text-muted" : "text-faint")}>
             <span className={cx("grid h-5 w-5 place-items-center rounded-full border text-[10px]", i < step ? "border-good bg-good text-white" : i === step ? "border-accent text-accent" : "border-line-strong")}>
               {i < step ? "✓" : i + 1}
             </span>

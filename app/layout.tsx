@@ -29,13 +29,19 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="flex min-h-full flex-col">
+        <a
+          href="#content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-ink focus:px-3 focus:py-2 focus:text-paper"
+        >
+          Skip to content
+        </a>
         <header className="border-b border-line">
           <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4">
             <Link href="/" className="flex items-baseline gap-1.5">
               <span className="font-serif text-2xl leading-none">Haggle</span>
               <span className="h-1.5 w-1.5 rounded-full bg-accent" />
             </Link>
-            <nav className="flex items-center gap-1 text-sm">
+            <nav aria-label="Main" className="flex items-center gap-1 text-sm">
               <Link href="/buy/new" className="rounded-md px-3 py-1.5 text-muted transition hover:bg-sunken hover:text-ink">
                 Buy
               </Link>
@@ -54,7 +60,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             </nav>
           </div>
         </header>
-        {children}
+        <div id="content" tabIndex={-1} className="flex flex-1 flex-col outline-none">
+          {children}
+        </div>
         <footer className="mt-auto border-t border-line">
           <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-xs text-muted">
             <span>Haggle. Agentic commerce you can trust, on PayPal.</span>

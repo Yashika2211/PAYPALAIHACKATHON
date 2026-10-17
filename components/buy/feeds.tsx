@@ -17,7 +17,7 @@ export function FirewallFeed({ events }: { events: FeedEvent[] }) {
       {items.length === 0 ? (
         <p className="px-4 py-6 text-center text-xs text-muted">Every agent action will be checked here.</p>
       ) : (
-        <ol className="flex max-h-[26rem] flex-col-reverse overflow-y-auto">
+        <ol role="log" aria-live="polite" aria-label="Mandate Firewall decisions" className="flex max-h-[26rem] flex-col-reverse overflow-y-auto">
           {items.map((e) => {
             const d = e.payload.decision as string;
             return (
@@ -67,7 +67,7 @@ export function PayPalTimeline({ events }: { events: FeedEvent[] }) {
       {items.length === 0 ? (
         <p className="px-4 py-6 text-center text-xs text-muted">Authorizations, captures and payouts appear here as PayPal confirms them.</p>
       ) : (
-        <ol className="relative px-4 py-3">
+        <ol role="log" aria-live="polite" aria-label="PayPal events" className="relative px-4 py-3">
           <span className="absolute top-4 bottom-4 left-[21px] w-px bg-line" aria-hidden />
           {items.map((e) => {
             const p = e.payload;

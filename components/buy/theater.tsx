@@ -14,8 +14,8 @@ export function Theater({ events, merchants, active }: { events: FeedEvent[]; me
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-serif text-2xl">Negotiation theater</h2>
         {active && (
-          <span className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-accent" /> agents haggling
+          <span role="status" className="flex items-center gap-1.5 text-xs text-muted">
+            <span aria-hidden className="pulse-dot h-1.5 w-1.5 rounded-full bg-accent" /> agents haggling
           </span>
         )}
       </div>
