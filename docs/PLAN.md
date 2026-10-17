@@ -1,4 +1,13 @@
-# Haggle — M0 Plan
+# Haggle: M0 Plan
+
+> **Status (final):** every milestone below shipped, M8 stretch goals included. This document is the original M0 plan, kept for the record. The final build differs from it in these places:
+> - **One AUTHORIZE purchase unit per bundle**, with per-merchant partial captures. PayPal rejects multi-unit AUTHORIZE.
+> - **AI runs on Gemini** through the Vercel AI SDK, with a model × key chain and replayed real answers, because there were no Anthropic credits. The provider is still swappable.
+> - **No separate worker or queue:** negotiations run in-process via Next.js `after()`, and the append-only `events` table feeds the live UI over SSE.
+> - **Free-tier Render Blueprint:** the maintenance sweep (expire mandates, release stale holds, retry and reconcile payouts) runs inside the web service, because the free plan has no cron.
+> - **AG Grid Community equivalents** for Enterprise features: sort-based grouping and SVG sparklines.
+>
+> See [`../CHANGELOG.md`](../CHANGELOG.md) for what shipped, and the README for the architecture.
 
 Agent-native marketplace for small businesses. Merchant sales agents, buyer procurement agents, a deterministic Mandate Firewall, and escrow-style settlement on PayPal.
 
