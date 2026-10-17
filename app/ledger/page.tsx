@@ -1,6 +1,8 @@
 import { Ledger } from "@/components/ledger";
 import { Label } from "@/components/ui";
 
+export const metadata = { title: "Ledger" };
+
 export default function LedgerPage() {
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12">

@@ -9,8 +9,10 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 const serif = Instrument_Serif({ variable: "--font-serif-display", subsets: ["latin"], weight: "400", style: ["normal", "italic"] });
 
 export const metadata: Metadata = {
-  title: "Haggle",
-  description: "Agentic commerce you can trust, on PayPal.",
+  title: { default: "Haggle", template: "%s · Haggle" },
+  description: "Every small business gets an AI salesperson. Every buyer gets an AI negotiator. PayPal makes the handshake real.",
+  metadataBase: new URL(process.env.PUBLIC_BASE_URL ?? "http://localhost:3000"),
+  openGraph: { title: "Haggle", description: "Agentic commerce you can trust, on PayPal.", type: "website" },
 };
 
 export const viewport: Viewport = {

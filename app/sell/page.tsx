@@ -1,6 +1,8 @@
 import { MerchantOnboarding } from "@/components/merchant-onboarding";
 import { Label } from "@/components/ui";
 
+export const metadata = { title: "Sell" };
+
 export default function SellPage() {
   // First sandbox merchant account as a convenient default; merchants overwrite it with their own.
   const defaultPayoutEmail = (process.env.SANDBOX_MERCHANT_EMAILS ?? "").split(",")[0]?.trim() ?? "";
