@@ -99,7 +99,15 @@ async function main() {
   const reset = process.argv.includes("--reset");
   const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count from merchants`;
   if (count > 0 && !reset) {
-    console.log(`already seeded (${count} merchants); pass --reset to wipe demo data and reseed`);
+    // Repair seeded merchants that got placeholder payout emails (e.g. the env was empty on first deploy).
+    let repaired = 0;
+    if (emails.length) {
+      for (const m of MERCHANTS) {
+        const rows = await sql`update merchants set payout_email = ${m.payoutEmail} where name = ${m.name} and payout_email like '%@example.com' returning id`;
+        repaired += rows.length;
+      }
+    }
+    console.log(`already seeded (${count} merchants)${repaired ? `; repaired ${repaired} payout email(s)` : ""}; pass --reset to wipe demo data and reseed`);
     await sql.end();
     return;
   }
