@@ -27,7 +27,8 @@
     "mcp:smoke": "tsx scripts/mcp-smoke.ts",
     "sandbox:fund": "tsx --env-file-if-exists=.env scripts/fund-sandbox.ts",
     "tunnel": "node scripts/tunnel.mjs",
-    "logs:scrub": "tsx --env-file-if-exists=.env scripts/scrub-logs.mts"
+    "logs:scrub": "tsx --env-file-if-exists=.env scripts/scrub-logs.mts",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test:coverage"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",
@@ -62,6 +63,9 @@
   },
   "packageManager": "pnpm@12.5.1",
   "engines": {
-    "node": ">=20"
-  }
+    "node": ">=22"
+  },
+  "description": "Haggle: the agent-native marketplace for small businesses. AI negotiators, a Mandate Firewall and PayPal escrow.",
+  "license": "MIT",
+  "author": "Yashika Bhatia"
 }

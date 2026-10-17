@@ -1,5 +1,10 @@
 # Haggle
 
+[![CI](https://github.com/Yashika2211/PAYPALAIHACKATHON/actions/workflows/ci.yml/badge.svg)](https://github.com/Yashika2211/PAYPALAIHACKATHON/actions/workflows/ci.yml)
+![Policy coverage](https://img.shields.io/badge/policy%20coverage-100%25-1c7a4b)
+![PayPal sandbox](https://img.shields.io/badge/PayPal-sandbox-003087)
+[![License: MIT](https://img.shields.io/badge/license-MIT-e4501b)](LICENSE)
+
 **The agent-native marketplace for small businesses.**
 Every small business gets an AI salesperson. Every buyer gets an AI negotiator. PayPal makes the handshake real.
 
@@ -169,6 +174,7 @@ cp .env.example .env          # fill PayPal sandbox + Gemini keys (see below)
 pnpm install
 pnpm bootstrap                # docker Postgres on :5433, migrations, seed
 pnpm dev                      # http://localhost:3000
+pnpm verify                   # lint + typecheck + unit tests with coverage
 ```
 
 | Variable | Where to get it |
