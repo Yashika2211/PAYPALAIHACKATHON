@@ -12,7 +12,8 @@
 - [x] Resilience: model × key chain, quota cooldown, cached real answers, deterministic fallbacks
 
 ## Needs the account owner
-- [ ] Deploy on Render (New → Blueprint), then `pnpm webhook:register https://<render-url>` and set PAYPAL_WEBHOOK_ID
+- [x] Deploy on Render: live at https://haggle-6xg1.onrender.com
+- [ ] Render env group: add GOOGLE_GENERATIVE_AI_API_KEY (live /api/health still reports "deterministic fallback")
 - [ ] Record the demo video (docs/DEMO_SCRIPT.md), upload public on YouTube
 - [ ] Devpost: paste docs/DEVPOST.md, add sandbox buyer password in the private testing notes
 - [ ] Optional: add 1–2 more free Gemini keys (separate projects) comma-separated for more quota
