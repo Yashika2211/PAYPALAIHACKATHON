@@ -10,7 +10,7 @@ Every small business gets an AI salesperson. Every buyer gets an AI negotiator. 
 
 ![Haggle landing page](docs/screenshots/landing.png)
 
-> **Live demo:** [haggle-6xg1.onrender.com](https://haggle-6xg1.onrender.com) (free Render instance: the first visit after idle takes ~50 s to wake) · **Video:** _YouTube link_ · **License:** [MIT](LICENSE)
+> **Live demo:** [haggle-6xg1.onrender.com](https://haggle-6xg1.onrender.com) (free Render instance: the first visit after idle takes ~50 s to wake) · **Video:** [youtu.be/p3SGdAkQ3a0](https://youtu.be/p3SGdAkQ3a0) · **License:** [MIT](LICENSE)
 
 ---
 

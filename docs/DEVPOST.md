@@ -1,6 +1,6 @@
 # Haggle: Devpost write-up (draft)
 
-**Live demo:** https://haggle-6xg1.onrender.com · **Code:** https://github.com/Yashika2211/PAYPALAIHACKATHON
+**Live demo:** https://haggle-6xg1.onrender.com · **Video:** https://youtu.be/p3SGdAkQ3a0 · **Code:** https://github.com/Yashika2211/PAYPALAIHACKATHON
 
 **Tagline:** Every small business gets an AI salesperson. Every buyer gets an AI negotiator. PayPal makes the handshake real.
 
