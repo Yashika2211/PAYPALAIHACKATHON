@@ -65,6 +65,10 @@ function SparklineCell({ data }: ICellRendererParams<LedgerRow>) {
   );
 }
 
+// Rows are loaded in onGridReady and streamed in as transactions. The initial rowData must be a
+// stable reference: a fresh `[]` on each render makes AG Grid replace (wipe) every row on re-render.
+const NO_ROWS: LedgerRow[] = [];
+
 export function Ledger() {
   const apiRef = useRef<GridApi<LedgerRow> | null>(null);
   const rowsRef = useRef(new Map<string, LedgerRow>());
@@ -264,7 +268,7 @@ export function Ledger() {
           <AgGridReact<LedgerRow>
             theme={haggleGridTheme}
             columnDefs={columns}
-            rowData={[]}
+            rowData={NO_ROWS}
             getRowId={(p) => p.data.id}
             onGridReady={onGridReady}
             quickFilterText={quick}
