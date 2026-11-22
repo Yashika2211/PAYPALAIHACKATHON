@@ -5,6 +5,8 @@
 ![PayPal sandbox](https://img.shields.io/badge/PayPal-sandbox-003087)
 [![License: MIT](https://img.shields.io/badge/license-MIT-e4501b)](LICENSE)
 
+Amazon off campus code YJEUPY
+
 **The agent-native marketplace for small businesses.**
 Every small business gets an AI salesperson. Every buyer gets an AI negotiator. PayPal makes the handshake real.
 
